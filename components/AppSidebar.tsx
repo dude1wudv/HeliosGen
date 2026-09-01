@@ -50,6 +50,8 @@ import {
   Avatar,
   AvatarFallback,
 } from "@/components/ui/avatar";
+const MANAGED_MODE = process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true";
+
 
 // ── Deterministic pixel-art avatar ───────────────────────────────────────────
 function fnv1a(str: string): number {
@@ -683,10 +685,10 @@ export function AppSidebar() {
   const setAzureKeySet    = useWorkflowStore((s) => s.setAzureKeySet);
   const clearLocalData    = useWorkflowStore((s) => s.clearLocalData);
   const clearSessions     = useChatSessionStore((s) => s.clearSessions);
-  const supabase = createClient();
+  const supabase = React.useMemo(() => MANAGED_MODE ? null : createClient(), []);
 
   React.useEffect(() => {
-    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true") {
+    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true" || MANAGED_MODE) {
       fetch("/api/settings/kie-key")
         .then((r) => r.json())
         .then((d) => setKieKeySet(!!d.hasToken))
@@ -697,6 +699,7 @@ export function AppSidebar() {
         .catch(() => setAzureKeySet(null));
       return;
     }
+    if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       if (data.user) useChatSessionStore.getState().loadFromSupabase();
@@ -723,10 +726,21 @@ export function AppSidebar() {
       }
     });
     return () => subscription.unsubscribe();
-  }, [supabase, setKieKeySet, setAzureKeySet]);
+  }, [supabase, setKieKeySet, setAzureKeySet, clearLocalData, clearSessions]);
 
   React.useEffect(() => {
     const fetchBalance = async () => {
+      if (MANAGED_MODE) {
+        const res = await fetch("/api/credit");
+        if (!res.ok) return;
+        const data = await res.json();
+        const val = typeof data?.data === "number"
+          ? data.data
+          : (data?.data?.balance ?? data?.balance ?? null);
+        setBalance(val);
+        return;
+      }
+      if (!supabase) return;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const headers: HeadersInit = session?.access_token
@@ -748,9 +762,14 @@ export function AppSidebar() {
   }, [supabase]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    if (MANAGED_MODE) {
+      await fetch("/api/logout", { method: "POST" });
+    } else {
+      await supabase?.auth.signOut();
+    }
     clearLocalData();
     clearSessions();
+    router.replace("/bootstrap");
   };
 
   const { sessions: allSessions, deleteSession } = useChatSessionStore();

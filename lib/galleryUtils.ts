@@ -28,7 +28,8 @@ export function thumbSrc(url: string, w = 96): string {
 }
 
 export async function getToken(): Promise<string | undefined> {
-  if (process.env.NEXT_PUBLIC_GUEST_MODE === "true") return "guest";
+  if (process.env.NEXT_PUBLIC_GUEST_MODE === "true" ||
+      process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true") return "managed";
   const { data } = await createClient().auth.getSession();
   return data.session?.access_token;
 }

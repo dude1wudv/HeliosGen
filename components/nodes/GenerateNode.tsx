@@ -36,6 +36,7 @@ const MODEL_CAPS = Object.fromEntries(
   }])
 );
 const DEFAULT_CAPS = MODEL_CAPS["nano-banana-2"];
+const MANAGED_MODE = process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true";
 
 // ── Aspect ratios ─────────────────────────────────────────────────────────────
 
@@ -570,8 +571,8 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
   const generate = useCallback(async () => {
     requestNotificationPermission();
     let accessToken: string;
-    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true") {
-      accessToken = "guest";
+    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true" || MANAGED_MODE) {
+      accessToken = MANAGED_MODE ? "managed" : "guest";
     } else {
       const { data: authData } = await createClient().auth.getSession();
       if (!authData.session) { setAuthModalOpen(true); return; }
@@ -1441,7 +1442,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
           )}
 
           {/* Generate button — always right */}
-          {!readOnly && <GenerateButton onClick={handleGenerateBatch} busy={animBusy} disabled={promptOverLimit || (!isCodexProvider && kieKeySet === false) || busy || hasFailedImageInput} warningMessages={hasFailedImageInput ? ["The connected image input has no valid content"] : undefined} />}
+          {!readOnly && <GenerateButton onClick={handleGenerateBatch} busy={animBusy} disabled={promptOverLimit || (!MANAGED_MODE && !isCodexProvider && kieKeySet === false) || busy || hasFailedImageInput} warningMessages={hasFailedImageInput ? ["The connected image input has no valid content"] : undefined} />}
         </div>
       </div>
 

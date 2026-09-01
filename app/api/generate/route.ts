@@ -322,6 +322,9 @@ export async function POST(req: NextRequest) {
     const sub2apiQuality = quality === "low" || quality === "medium" || quality === "high" || quality === "auto"
       ? quality
       : quality === "4k" ? "high" : "medium";
+    const sub2apiResolution = quality === "1k" || quality === "2k" || quality === "4k"
+      ? quality
+      : azureResolution;
     const taskId = `sub2api-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     jobStore.set(taskId, { status: "pending", type: "image", userId: currentUserId });
     guestDb.insertGeneration({
@@ -344,7 +347,7 @@ export async function POST(req: NextRequest) {
           prompt: prompt.slice(0, cfg.apiInput.promptMaxLength),
           aspectRatio,
           quality: sub2apiQuality,
-          resolution: azureResolution,
+          resolution: sub2apiResolution,
           customWidth: azureCustomWidth,
           customHeight: azureCustomHeight,
           imageUrls,

@@ -615,11 +615,13 @@ export default function WorkflowDashboard() {
   // Guest/desktop build has no accounts — treat as "signed in" from the first
   // render so no auth copy ever flashes.
   const [user, setUser] = useState<boolean | null>(
-    process.env.NEXT_PUBLIC_GUEST_MODE === "true" ? true : null,
+    process.env.NEXT_PUBLIC_GUEST_MODE === "true" ||
+    process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true" ? true : null,
   );
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true") { setUser(true); return; }
+    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true" ||
+        process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true") return;
     const supabase = createClient();
     supabase.auth.getSession().then(({ data }) => setUser(!!data.session?.user));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {

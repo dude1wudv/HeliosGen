@@ -17,7 +17,9 @@ interface Message {
 
 
 export function QuickAssist() {
-  const [user, setUser] = useState<boolean | null>(null);
+  const [user, setUser] = useState<boolean | null>(
+    process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true" ? true : null,
+  );
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -38,6 +40,7 @@ export function QuickAssist() {
 
   // Track auth state
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true") return;
     const supabase = createClient();
     supabase.auth.getSession().then(({ data }) => setUser(!!data.session?.user));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {

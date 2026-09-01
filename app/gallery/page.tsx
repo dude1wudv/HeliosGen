@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { browserNotify, requestNotificationPermission } from "@/lib/browserNotify";
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+const MANAGED_MODE = process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true";
 
 const DEMO_GALLERY_ITEMS: import("@/lib/galleryUtils").GalleryItem[] = [
   {
@@ -1358,7 +1359,7 @@ function GalleryInner() {
       setAuthLoaded(true);
       return;
     }
-    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true") {
+    if (process.env.NEXT_PUBLIC_GUEST_MODE === "true" || MANAGED_MODE) {
       setUser({ id: "guest" } as unknown as User);
       setAuthLoaded(true);
       return;
@@ -1468,7 +1469,7 @@ function GalleryInner() {
 
   useEffect(() => {
     if (!authLoaded) return;
-    if (kieKeySet === null && process.env.NEXT_PUBLIC_GUEST_MODE !== "true") return;
+    if (kieKeySet === null && process.env.NEXT_PUBLIC_GUEST_MODE !== "true" && !MANAGED_MODE) return;
     loadItems(tab, 0, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoaded, kieKeySet]);
@@ -2202,7 +2203,7 @@ function GalleryInner() {
   };
 
   const generate = async () => {
-    if (kieKeySet === false) return;
+    if (!MANAGED_MODE && kieKeySet === false) return;
     if (!prompt.trim() && !isVideo) return;
     requestNotificationPermission();
     if (refImages.some(r => r.uploading)) { setGenError("Images still uploading…"); setTimeout(() => setGenError(""), 3_000); return; }
@@ -2239,7 +2240,7 @@ function GalleryInner() {
         }
       }
     }
-    if (!user && process.env.NEXT_PUBLIC_GUEST_MODE !== "true") {
+    if (!user && process.env.NEXT_PUBLIC_GUEST_MODE !== "true" && !MANAGED_MODE) {
       setAuthModalOpen(true);
       return;
     }
@@ -2620,7 +2621,7 @@ function GalleryInner() {
   const displayVidRefAudios = getDisplayOrder(vidRefAudios, draggingId, reorderOverId);
 
   const vidRequiresPrompt = isVideo && !!(vidModel?.apiInput.promptMaxLength);
-  const canGenerate = kieKeySet === false ? false : submitting ? false : promptOverLimit ? false : (vidRequiresPrompt || !isVideo) ? prompt.trim().length > 0 : true;
+  const canGenerate = !MANAGED_MODE && kieKeySet === false ? false : submitting ? false : promptOverLimit ? false : (vidRequiresPrompt || !isVideo) ? prompt.trim().length > 0 : true;
 
   const handleAddReference = useCallback((url: string) => {
     if (refImages.some(r => r.cdnUrl === url || r.objectUrl === url)) {
@@ -3206,7 +3207,7 @@ function GalleryInner() {
       </div>}
 
       {/* ── Grid ── */}
-      {!user && process.env.NEXT_PUBLIC_GUEST_MODE !== "true" ? <GalleryLoggedOut tab={tab} /> : <div ref={gridOuterRef} style={{ flex: 1, overflowY: "auto", paddingBottom: "260px", display: "flex", flexDirection: "column", userSelect: marqueeRect ? "none" : undefined, cursor: marqueeRect ? "crosshair" : undefined }} onMouseDown={e => {
+      {!user && process.env.NEXT_PUBLIC_GUEST_MODE !== "true" && !MANAGED_MODE ? <GalleryLoggedOut tab={tab} /> : <div ref={gridOuterRef} style={{ flex: 1, overflowY: "auto", paddingBottom: "260px", display: "flex", flexDirection: "column", userSelect: marqueeRect ? "none" : undefined, cursor: marqueeRect ? "crosshair" : undefined }} onMouseDown={e => {
         if (e.button !== 0) return;
         const target = e.target as HTMLElement;
         if (target.closest("button, .gallery-action-btn, .gallery-checkbox")) return;
