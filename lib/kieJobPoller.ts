@@ -11,7 +11,7 @@
  * Not covered yet: Google Veo models (`/api/v1/veo/generate` +
  * `/api/v1/veo/record-info`, which use a different response shape).
  */
-import { jobStore, type JobResult } from "./jobStore";
+import { jobStore, type SettledJobResult, type SettledJobResultWithoutOwner } from "./jobStore";
 import { jobEvents } from "./jobEvents";
 import { mirrorToR2 } from "./r2";
 import { GUEST_MODE } from "./guestMode";
@@ -135,15 +135,16 @@ function extractUrls(data: Record<string, unknown>): string[] {
 }
 
 async function settleSuccess(taskId: string, kind: Kind, kieUrls: string[]): Promise<void> {
+  const owner = jobStore.get(taskId)?.userId;
+  if (!owner) return;
   const folder = kind === "video" ? "videos" : "images";
   let storedUrls: string[];
   try {
-    storedUrls = await Promise.all(kieUrls.map((u) => mirrorToR2(u, folder)));
-  } catch (e) {
-    console.error(`[kie-poller] ${taskId} storage mirror failed, using source URLs:`, (e as Error).message);
+    storedUrls = await Promise.all(kieUrls.map((url) => mirrorToR2(url, folder, owner)));
+  } catch (error) {
+    console.error(`[kie-poller] ${taskId} storage mirror failed, using source URLs:`, (error as Error).message);
     storedUrls = kieUrls;
   }
-
   settle(
     taskId,
     kind,
@@ -154,19 +155,23 @@ async function settleSuccess(taskId: string, kind: Kind, kieUrls: string[]): Pro
 }
 
 /** Write jobStore, emit the SSE event, and mirror into the guest DB. */
-function settle(taskId: string, kind: Kind, result: JobResult): void {
-  jobStore.set(taskId, result);
-  jobEvents.emit(`job:${taskId}`, result);
+function settle(taskId: string, kind: Kind, result: SettledJobResultWithoutOwner): void {
+  const pending = jobStore.get(taskId);
+  if (!pending?.userId) return;
+  const owned = { ...result, userId: pending.userId } as SettledJobResult;
+  jobStore.set(taskId, owned);
+  jobEvents.emit(`job:${taskId}`, owned);
 
   if (!GUEST_MODE) return;
-  if (result.status === "done") {
+  if (owned.status === "done") {
     guestDb.updateGeneration(
       taskId,
+      pending.userId,
       kind === "video"
-        ? { status: "done", video_url: result.videoUrl }
-        : { status: "done", image_url: result.imageUrl, image_urls: result.imageUrls },
+        ? { status: "done", video_url: owned.videoUrl }
+        : { status: "done", image_url: owned.imageUrl, image_urls: owned.imageUrls },
     );
-  } else if (result.status === "error") {
-    guestDb.updateGeneration(taskId, { status: "error", error_msg: result.error });
+  } else {
+    guestDb.updateGeneration(taskId, pending.userId, { status: "error", error_msg: owned.error });
   }
 }

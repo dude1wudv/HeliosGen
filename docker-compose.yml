@@ -1,0 +1,31 @@
+services:
+  heliosgen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: heliosgen:managed
+    container_name: heliosgen
+    restart: unless-stopped
+    env_file:
+      - /opt/heliosgen-deploy/helios.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HELIOS_DATA_DIR: /data
+      SUB2API_MANAGED_MODE: "true"
+      NEXT_PUBLIC_SUB2API_MANAGED_MODE: "true"
+      HELIOS_PUBLIC_ORIGIN: https://canvas.sub.sunmmyapi.xyz
+      SUB2API_INTERNAL_BASE_URL: http://sub2api:8080/api/v1
+      NODE_OPTIONS: --max-old-space-size=1536
+    mem_limit: 2g
+    ports:
+      - "127.0.0.1:8170:3000"
+    volumes:
+      - /opt/heliosgen-deploy/data:/data
+    networks:
+      - sub2api-network
+
+networks:
+  sub2api-network:
+    external: true
+    name: sub2api_sub2api-network

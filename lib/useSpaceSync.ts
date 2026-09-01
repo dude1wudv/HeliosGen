@@ -7,6 +7,8 @@ import { SYNC_NOW_EVENT, requestWorkflowSync } from "./workflowSyncBus";
 const DEBOUNCE_MS  = 1_500; // continuous edits (drag frames, typing): coalesce
 const IMMEDIATE_MS = 250;   // discrete edits (add/delete/connect/resize-end): near-instant, still coalesces a burst
 const GUEST = process.env.NEXT_PUBLIC_GUEST_MODE === "true";
+const MANAGED = process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true";
+const LOCAL_DB = GUEST || MANAGED;
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 
@@ -51,7 +53,7 @@ export function useSpaceSync() {
   useEffect(() => {
     if (!hydrated) return;
     (async () => {
-      if (GUEST) {
+      if (LOCAL_DB) {
         try {
           const res = await fetch("/api/guest-spaces");
           if (!res.ok) return;
@@ -107,9 +109,7 @@ export function useSpaceSync() {
   // flush (capped at ~64KB of body by the browser — fine for the stripped
   // spaces payload; a normal fetch is used for the regular debounced path).
   const save = useCallback(async ({ keepalive = false }: { keepalive?: boolean } = {}) => {
-    dirtyRef.current = false;
-    immediateRef.current = false;
-    if (GUEST) {
+    if (LOCAL_DB) {
       setStatus("syncing");
       try {
         const spacesToSave = useWorkflowStore.getState().spaces.filter((sp) => sp.nodes.length > 0);

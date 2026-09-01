@@ -428,6 +428,7 @@ function ApiKeysPanel({
   onAzureKeyDelete,
   codexStatus,
   onCodexLoginSuccess,
+  managed = false,
 }: {
   azureBaseUrl: string;
   onBaseUrlChange: (v: string) => void;
@@ -439,6 +440,7 @@ function ApiKeysPanel({
   onAzureKeyDelete: () => Promise<void>;
   codexStatus: CodexStatus;
   onCodexLoginSuccess: () => void;
+  managed?: boolean;
 }) {
   const [kieInput, setKieInput]       = useState("");
   const [kieSaving, setKieSaving]     = useState(false);
@@ -476,7 +478,7 @@ function ApiKeysPanel({
 
   /* Poll while a device-code login is pending, until it resolves */
   useEffect(() => {
-    if (loginFlow.status !== "pending") return;
+    if (managed || loginFlow.status !== "pending") return;
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/settings/codex-login");
@@ -505,7 +507,7 @@ function ApiKeysPanel({
       } catch { /* network hiccup — keep polling */ }
     }, 2500);
     return () => clearInterval(interval);
-  }, [loginFlow.status, onCodexLoginSuccess]);
+  }, [loginFlow.status, onCodexLoginSuccess, managed]);
 
   const handleKieSave = async () => {
     if (!kieInput.trim()) return;
@@ -535,17 +537,31 @@ function ApiKeysPanel({
     }
   };
 
+  if (managed) {
+    const publicBaseUrl = process.env.NEXT_PUBLIC_SUB2API_API_BASE_URL ?? "https://sub.sunmmyapi.xyz/v1";
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <div>
+          <h2 style={{ fontSize: "17px", fontWeight: 600, color: "rgba(255,255,255,0.9)", margin: 0 }}>API access</h2>
+          <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)", marginTop: "7px", lineHeight: 1.5 }}>
+            This workspace is managed by Sub2API. Your key is held in an encrypted HttpOnly session and is never readable by this browser.
+          </p>
+        </div>
+        <div style={{ padding: "16px", borderRadius: "12px", border: "1px solid rgba(74,222,128,0.2)", background: "rgba(74,222,128,0.05)" }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>Sub2API (managed)</div>
+          <div style={{ marginTop: "10px", fontSize: "11px", color: "rgba(255,255,255,0.45)" }}>Public request address</div>
+          <code style={{ display: "block", marginTop: "4px", fontSize: "12px", color: "rgba(134,239,172,0.9)" }}>{publicBaseUrl}</code>
+          <div style={{ marginTop: "12px", fontSize: "11px", color: "rgba(255,255,255,0.35)" }}>
+            Model access and billing use your Sub2API account. Kie and Azure settings remain available for explicitly configured personal providers.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       {/* Header */}
-      <div>
-        <h2 style={{ fontSize: "17px", fontWeight: 600, color: "rgba(255,255,255,0.9)", margin: 0, lineHeight: 1.2 }}>
-          API Keys
-        </h2>
-        <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.28)", marginTop: "6px", lineHeight: 1.5 }}>
-          Your Kie.ai key is stored securely on the server — it is never exposed to the browser.
-        </p>
-      </div>
 
       {/* ──── Kie.ai API key ──────────────────────────────────────────── */}
       <div
@@ -1366,11 +1382,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   /* Load persisted data on mount */
   useEffect(() => {
+    const managed = process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true";
     setModelProviders(loadModelProviders());
     setAzureDeployments(loadAzureEndpoints());
     setAzureBaseUrl(loadAzureBaseUrl());
     setAzureTextDeployment(loadAzureTextDeployment());
     setAzureTextModelName(loadAzureTextModelName());
+    if (managed) return;
+    refreshCodexStatus();
     // Check if Kie key is saved on the server
     authHeader().then((h) =>
       fetch("/api/settings/kie-key", { headers: h })
@@ -1385,8 +1404,6 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         .then((d) => setAzureKeyStatus(d.hasToken ? "set" : "unset"))
         .catch(() => setAzureKeyStatus("unset"))
     );
-    // Check whether the server has a working codex-imagegen + codex login
-    refreshCodexStatus();
   }, [refreshCodexStatus]);
 
   /* Close on Escape */
@@ -1663,6 +1680,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 onAzureKeyDelete={handleAzureKeyDelete}
                 codexStatus={codexStatus}
                 onCodexLoginSuccess={refreshCodexStatus}
+                managed={process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true"}
               />
             )}
             {activeNav === "image-models" && (

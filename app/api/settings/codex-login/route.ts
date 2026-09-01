@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { spawn } from "child_process";
+import { existsSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 import { codexLoginStore } from "@/lib/codexLoginStore";
-
+import { MANAGED_MODE } from "@/lib/managedMode";
 // 15 minutes, matching the device code's own expiry (plus a little slack).
 const CODE_LIFETIME_MS = 16 * 60 * 1000;
 
@@ -47,12 +47,13 @@ async function confirmLoggedIn(): Promise<boolean> {
 }
 
 export async function GET() {
+  if (MANAGED_MODE) return NextResponse.json({ error: "provider_unavailable", code: "provider_unavailable" }, { status: 403 });
   return NextResponse.json(codexLoginStore.get());
 }
 
 export async function POST() {
+  if (MANAGED_MODE) return NextResponse.json({ error: "provider_unavailable", code: "provider_unavailable" }, { status: 403 });
   const current = codexLoginStore.get();
-
   // A device code is already pending and still within its lifetime — don't
   // spawn a second `codex login` on top of it (and never kill the first: the
   // CLI wipes any existing credentials as soon as a new login starts, so a

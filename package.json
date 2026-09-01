@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
+    "test": "vitest run",
     "desktop:dev": "node scripts/desktop/dev.mjs",
     "desktop:build": "CI=true tauri build",
     "desktop:icon": "tauri icon",
@@ -43,6 +44,7 @@
     "eslint-config-next": "16.2.3",
     "shadcn": "^4.7.0",
     "tailwindcss": "^4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

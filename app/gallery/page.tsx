@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense } fr
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
-import { IMAGE_MODELS, VIDEO_MODELS, AZURE_POPULAR_SIZES, validateAzureCustomSize } from "@/lib/modelConfig";
+import { IMAGE_MODELS, VIDEO_MODELS, AZURE_POPULAR_SIZES, validateAzureCustomSize, getDefaultImageModelId } from "@/lib/modelConfig";
 import { PROVIDERS, getModelProvider, setModelProvider, modelHasProviderChoice } from "@/lib/providers";
 import { useWorkflowStore } from "@/lib/store";
 import type { User } from "@supabase/supabase-js";
@@ -997,11 +997,12 @@ function GalleryInner() {
   const settingsSnapshotRef = useRef<SavedSettings | null>(null);
   const [modelId, setModelId] = useState<string>(() => {
     const s = loadSettings(tab, selectedFolderId);
-    return (s?.modelId && models.find(m => m.id === s.modelId)) ? s.modelId : models[0].id;
+    const fallback = isVideo ? models[0].id : getDefaultImageModelId();
+    return (s?.modelId && models.find(m => m.id === s.modelId)) ? s.modelId : fallback;
   });
   const [aspectRatio, setAspectRatio] = useState<string>(() => {
     const s = loadSettings(tab, selectedFolderId);
-    const mId = (s?.modelId && models.find(m => m.id === s.modelId)) ? s.modelId : models[0].id;
+    const mId = (s?.modelId && models.find(m => m.id === s.modelId)) ? s.modelId : (isVideo ? models[0].id : getDefaultImageModelId());
     const mdl = models.find(m => m.id === mId) ?? models[0];
     const azureOpts = (mdl as { azureResolutionOptions?: string[] }).azureResolutionOptions;
     if (s?.aspectRatio === "custom" && Number.isFinite(s.azureCustomWidth) && Number.isFinite(s.azureCustomHeight) && isAzureActiveForModel(mId, azureOpts)) {
@@ -1013,8 +1014,8 @@ function GalleryInner() {
   const [azureCustomWidth, setAzureCustomWidth] = useState<number | undefined>(() => loadSettings(tab, selectedFolderId)?.azureCustomWidth);
   const [azureCustomHeight, setAzureCustomHeight] = useState<number | undefined>(() => loadSettings(tab, selectedFolderId)?.azureCustomHeight);
   const [quality, setQuality] = useState<string>(() => loadSettings(tab, selectedFolderId)?.quality ?? "2k");
-  const [isAzureProvider, setIsAzureProvider] = useState<boolean>(false);
-  const [providerId, setProviderId] = useState<ReturnType<typeof getModelProvider>>("kie");
+  const [providerId, setProviderId] = useState<ReturnType<typeof getModelProvider>>(() => getModelProvider(getDefaultImageModelId()));
+  const [isAzureProvider, setIsAzureProvider] = useState(() => getModelProvider(getDefaultImageModelId()) === "azure");
   const [count, setCount] = useState<number>(() => loadSettings(tab, selectedFolderId)?.count ?? 1);
   const [duration, setDuration] = useState<number>(() => loadSettings(tab, selectedFolderId)?.duration ?? 5);
   const [mode, setMode] = useState<string>(() => loadSettings(tab, selectedFolderId)?.mode ?? "");

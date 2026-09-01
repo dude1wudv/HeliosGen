@@ -6,6 +6,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { uploadBuffer } from "@/lib/r2";
+import { resolveUserId } from "@/lib/guestMode";
+import { fetchSafeBuffer } from "@/lib/ssrf";
 import { writeFile, readFile, unlink, mkdtemp } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -19,20 +21,13 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   let inputPath: string | null  = null;
   let outputPath: string | null = null;
-
   try {
     const { videoUrl, timeSeconds = 0, lastFrame = false } = await req.json();
-
-    if (!videoUrl) {
-      return NextResponse.json({ error: "videoUrl is required" }, { status: 400 });
-    }
-
-    const res = await fetch(videoUrl);
-    if (!res.ok) {
-      return NextResponse.json({ error: `Failed to fetch video: ${res.status}` }, { status: 400 });
-    }
-    const videoBuffer = Buffer.from(await res.arrayBuffer());
-
+    const userId = await resolveUserId(req);
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!videoUrl) return NextResponse.json({ error: "videoUrl is required" }, { status: 400 });
+    const fetched = await fetchSafeBuffer(videoUrl, { maxBytes: 100 * 1024 * 1024, timeoutMs: 30_000 });
+    const videoBuffer = fetched.buffer;
     const tmpDir  = await mkdtemp(join(tmpdir(), "frame-"));
     inputPath  = join(tmpDir, "input.mp4");
     outputPath = join(tmpDir, "frame.jpg");
@@ -59,7 +54,7 @@ export async function POST(req: NextRequest) {
     await execFileAsync("ffmpeg", ffmpegArgs);
 
     const frameBuffer = await readFile(outputPath);
-    const cdnUrl = await uploadBuffer(frameBuffer, "image/jpeg", "references");
+    const cdnUrl = await uploadBuffer(frameBuffer, "image/jpeg", "references", userId);
 
     return NextResponse.json({ cdnUrl });
   } catch (e: unknown) {

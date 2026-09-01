@@ -293,9 +293,16 @@ All contributions are appreciated.
 
 ---
 
-# 📄 License
+# 📄 License and deployment authorization
 
-MIT License
+The upstream project README identifies HeliosGen as MIT licensed. The repository
+snapshot used by this fork does not include a standalone `LICENSE` file.
+
+Separately, on 2026-09-01 the upstream author explicitly authorized the operator
+to deploy HeliosGen as part of the operator's Sub2API service in a private
+message. The operator retains the original authorization evidence outside this
+repository; it is not committed because it contains private-message identity
+data.
 
 ---
 

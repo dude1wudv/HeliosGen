@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import https from "node:https";
-import http from "node:http";
 import { spawn } from "node:child_process";
 import { writeFile, unlink, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,10 +9,16 @@ import { pollKieJob } from "@/lib/kieJobPoller";
 import { ensureKieReachableImages } from "@/lib/kieUpload";
 import { ensureR2, uploadBuffer } from "@/lib/r2";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { IMAGE_MODELS, validateAzureCustomSize } from "@/lib/modelConfig";
+import { IMAGE_MODELS, validateAzureCustomSize, getDefaultImageModelId } from "@/lib/modelConfig";
 import { getKieTokenForUser } from "@/lib/getKieToken";
 import { getAzureKeyForUser } from "@/lib/getAzureKey";
 import { GUEST_MODE, resolveUserId } from "@/lib/guestMode";
+import { HELIOS_PUBLIC_ORIGIN, MANAGED_MODE } from "@/lib/managedMode";
+import { readSession } from "@/lib/sub2api/session";
+import { generateSub2ApiImage } from "@/lib/sub2api/images";
+import { createKieCallbackUrl } from "@/lib/mediaSignature";
+import { fetchSafeBuffer } from "@/lib/ssrf";
+import { readManagedMediaAsset } from "@/lib/managedMedia";
 import * as guestDb from "@/lib/guest/db";
 
 const BASE   = "https://api.kie.ai";
@@ -75,26 +80,17 @@ function httpsPost(
   });
 }
 
-
-// Fetch any http/https URL to a Buffer, following redirects
-function fetchBuffer(url: string, maxRedirects = 5): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    if (maxRedirects <= 0) return reject(new Error("Too many redirects"));
-    const u   = new URL(url);
-    const mod = u.protocol === "https:" ? https : (http as unknown as typeof https);
-    mod.get(url, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return fetchBuffer(res.headers.location, maxRedirects - 1).then(resolve).catch(reject);
-      }
-      if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
-        return reject(new Error(`HTTP ${res.statusCode} fetching image`));
-      }
-      const chunks: Buffer[] = [];
-      res.on("data", (c: Buffer) => chunks.push(c));
-      res.on("end",  () => resolve(Buffer.concat(chunks)));
-      res.on("error", reject);
-    }).on("error", reject);
-  });
+// Resolve remote references through the shared DNS, redirect, timeout, and
+// response-size policy. Local media URLs are resolved by the Sub2API adapter.
+async function fetchBuffer(url: string, userId: string): Promise<Buffer> {
+  if (url.startsWith("/api/media/")) {
+    const id = url.slice("/api/media/".length).split(/[?#/]/, 1)[0];
+    const asset = id ? guestDb.getMediaAsset(id, userId) : null;
+    if (!asset) throw new Error("Media asset is not available");
+    return readManagedMediaAsset(asset, 30 * 1024 * 1024);
+  }
+  const fetched = await fetchSafeBuffer(url, { maxBytes: 30 * 1024 * 1024, timeoutMs: 15_000 });
+  return fetched.buffer;
 }
 
 
@@ -164,12 +160,13 @@ async function curlMultipartPost(
   }
 }
 
-// Resolve every image URL to an R2 CDN URL (uploads base64 / mirrors external URLs)
-async function resolveImages(imageUrls: string[]): Promise<string[]> {
+// Resolve references to server storage. Hosted media URLs are translated to
+// their owner-checked object before any provider receives them.
+async function resolveImages(imageUrls: string[], userId?: string): Promise<string[]> {
   const resolved = await Promise.all(
-    imageUrls.slice(0, 14).map((u) => ensureR2(u, "references").catch(() => null))
+    imageUrls.slice(0, 16).map((url) => ensureR2(url, "references", userId).catch(() => null)),
   );
-  return resolved.filter((u): u is string => u !== null);
+  return resolved.filter((url): url is string => url !== null);
 }
 
 // codex-imagegen (https://github.com/jdmnk/codex-imagegen-cli) only accepts these four sizes.
@@ -256,7 +253,7 @@ export const maxDuration = 1000;
 
 export async function POST(req: NextRequest) {
   const {
-    model       = "nano-banana-2",
+    model       = getDefaultImageModelId(),
     prompt,
     imageUrls   = [],
     aspectRatio = "1:1",
@@ -285,6 +282,10 @@ export async function POST(req: NextRequest) {
     debugOnly?:          boolean;
   };
 
+  if (MANAGED_MODE && codexProvider) {
+    return NextResponse.json({ error: "provider_unavailable", code: "provider_unavailable" }, { status: 403 });
+  }
+
   if (debugOnly) {
     const body = { model, prompt, imageUrls, aspectRatio, quality, azureQuality, azureResolution, azureCustomWidth, azureCustomHeight };
     console.log("[DEBUG] generate payload:", JSON.stringify(body, null, 2));
@@ -296,15 +297,73 @@ export async function POST(req: NextRequest) {
   const cfg = IMAGE_MODELS.find((m) => m.id === model);
   if (!cfg) return NextResponse.json({ error: `Unknown model: ${model}` }, { status: 400 });
 
+  const currentUserId = await resolveUserId(req).catch(() => null);
+  if (!currentUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   let r2ImageUrls: string[] = [];
-  try {
-    r2ImageUrls = await resolveImages(imageUrls);
-  } catch {
-    // image mirroring failures are non-fatal — proceed without reference images
+
+  if (MANAGED_MODE) {
+    r2ImageUrls = imageUrls;
+  } else {
+    try {
+      r2ImageUrls = await resolveImages(imageUrls, currentUserId);
+    } catch {
+      // image mirroring failures are non-fatal — proceed without reference images
+    }
   }
 
-  const currentUserId = await resolveUserId(req).catch(() => null);
-
+  if (MANAGED_MODE && !azureBaseUrl && model === "gpt-image-2") {
+    const session = readSession(req);
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const customError = aspectRatio === "custom"
+      ? validateAzureCustomSize(azureCustomWidth ?? 0, azureCustomHeight ?? 0)
+      : null;
+    if (customError) return NextResponse.json({ error: customError }, { status: 400 });
+    const sub2apiQuality = quality === "low" || quality === "medium" || quality === "high" || quality === "auto"
+      ? quality
+      : quality === "4k" ? "high" : "medium";
+    const taskId = `sub2api-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    jobStore.set(taskId, { status: "pending", type: "image", userId: currentUserId });
+    guestDb.insertGeneration({
+      task_id: taskId,
+      user_id: currentUserId,
+      generation_type: "image",
+      status: "pending",
+      prompt,
+      model,
+      aspect_ratio: aspectRatio,
+      quality: sub2apiQuality,
+      reference_image_urls: imageUrls,
+    });
+    void (async () => {
+      try {
+        const image = await generateSub2ApiImage({
+          apiBaseUrl: session.apiBaseUrl,
+          apiKey: session.apiKey,
+          userId: currentUserId,
+          prompt: prompt.slice(0, cfg.apiInput.promptMaxLength),
+          aspectRatio,
+          quality: sub2apiQuality,
+          resolution: azureResolution,
+          customWidth: azureCustomWidth,
+          customHeight: azureCustomHeight,
+          imageUrls,
+        });
+        const imageUrl = await uploadBuffer(image.buffer, image.mimeType, "generated", currentUserId);
+        jobStore.set(taskId, { status: "done", imageUrl, userId: currentUserId });
+        guestDb.updateGeneration(taskId, currentUserId, { status: "done", image_url: imageUrl });
+      } catch (error: unknown) {
+        const typed = error as { status?: unknown; code?: unknown; message?: unknown };
+        const status = typeof typed.status === "number" ? typed.status : 502;
+        const code = typeof typed.code === "string" ? typed.code : "upstream_error";
+        const message = typeof typed.message === "string" ? typed.message.slice(0, 240) : "Sub2API image request failed";
+        const safeMessage = `${status} ${code}: ${message.replace(/[\\r\\n]/g, " ")}`;
+        jobStore.set(taskId, { status: "error", error: safeMessage, userId: currentUserId });
+        guestDb.updateGeneration(taskId, currentUserId, { status: "error", error_msg: safeMessage });
+      }
+    })();
+    return NextResponse.json({ taskId });
+  }
   // ── Azure Foundry branch ──────────────────────────────────────────────────────
   if (azureBaseUrl && azureDeployment) {
     const azureKey = currentUserId
@@ -342,7 +401,7 @@ export async function POST(req: NextRequest) {
 
           const images = await Promise.all(
             r2ImageUrls.slice(0, cfg.maxImages).map(async (imgUrl) => {
-              const buf  = await fetchBuffer(imgUrl);
+              const buf  = await fetchBuffer(imgUrl, currentUserId);
               const raw  = imgUrl.split("?")[0].split(".").pop()?.toLowerCase() ?? "png";
               const ext  = raw === "jpg" ? "jpeg" : raw;
               const mime = ext === "jpeg" ? "image/jpeg" : "image/png";
@@ -361,24 +420,18 @@ export async function POST(req: NextRequest) {
           const curl = await curlMultipartPost(azureUrl, azureKey, images, textFields);
           res = { ok: curl.ok, status: curl.status, text: () => Promise.resolve(curl.body) };
         } else {
-          // ── Text-to-image: JSON /images/generations ────────────────────────
           const azureUrl = `${base}/openai/deployments/${azureDeployment}/images/generations?api-version=${azureApiVersion}`;
 
           const body: Record<string, unknown> = {
-            prompt:             truncatedPrompt,
-            n:                  1,
-            output_format:      "png",
+            prompt: truncatedPrompt,
+            n: 1,
+            output_format: "png",
             output_compression: 100,
             quality,
           };
           if (size && size !== "auto") body.size = size;
 
-          console.log("[azure/generations] request →", {
-            url:    azureUrl,
-            method: "POST",
-            body,
-          });
-
+          console.log("[azure/generations] request →", { url: azureUrl, method: "POST", body });
           res = await httpsPost(
             azureUrl,
             { "Content-Type": "application/json", Authorization: `Bearer ${azureKey}` },
@@ -398,22 +451,22 @@ export async function POST(req: NextRequest) {
             };
             displayError = code ? (friendlyErrors[code] ?? code) : displayError;
           } catch { /* not JSON */ }
-          jobStore.set(azureTaskId, { status: "error", error: displayError });
+          jobStore.set(azureTaskId, { status: "error", error: displayError, userId: azureUserId ?? undefined });
           return;
         }
 
         const azureJson = JSON.parse(txt);
         const b64 = azureJson?.data?.[0]?.b64_json as string | undefined;
         if (!b64) {
-          jobStore.set(azureTaskId, { status: "error", error: "Azure returned no image data" });
+          jobStore.set(azureTaskId, { status: "error", error: "Azure returned no image data", userId: azureUserId ?? undefined });
           return;
         }
 
-        const buf      = Buffer.from(b64, "base64");
-        const imageUrl = await uploadBuffer(buf, "image/png", "generated");
-        jobStore.set(azureTaskId, { status: "done", imageUrl });
+        const buf = Buffer.from(b64, "base64");
+        const imageUrl = await uploadBuffer(buf, "image/png", "generated", azureUserId ?? undefined);
+        jobStore.set(azureTaskId, { status: "done", imageUrl, userId: azureUserId ?? undefined });
 
-        if (GUEST_MODE) {
+        if (GUEST_MODE || MANAGED_MODE) {
           guestDb.insertGeneration({
             task_id: azureTaskId, user_id: azureUserId, generation_type: "image",
             status: "done", image_url: imageUrl, prompt: prompt.slice(0, 2000),
@@ -441,7 +494,7 @@ export async function POST(req: NextRequest) {
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[azure] background error:", msg, e);
-        jobStore.set(azureTaskId, { status: "error", error: msg });
+        jobStore.set(azureTaskId, { status: "error", error: msg, userId: azureUserId ?? undefined });
       }
     })();
 
@@ -453,7 +506,7 @@ export async function POST(req: NextRequest) {
   // session on this host — so there's no key lookup here, unlike the other branches.
   if (codexProvider) {
     const codexTaskId = `codex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    jobStore.set(codexTaskId, { status: "pending", type: "image", userId: currentUserId ?? undefined });
+    jobStore.set(codexTaskId, { status: "pending", type: "image", userId: currentUserId });
 
     const codexUserId = currentUserId;
     const size = CODEX_SIZE_MAP[aspectRatio] ?? "auto";
@@ -473,7 +526,7 @@ export async function POST(req: NextRequest) {
       try {
         const images = await Promise.all(
           r2ImageUrls.slice(0, 5).map(async (url) => {
-            const buf = await fetchBuffer(url);
+            const buf = await fetchBuffer(url, currentUserId);
             const raw = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "png";
             const ext = raw === "jpg" ? "jpeg" : raw;
             return { buf, ext };
@@ -482,7 +535,7 @@ export async function POST(req: NextRequest) {
 
         const outBuf   = await runCodexImagegen({ prompt: codexPrompt, images, size });
         const imageUrl = await uploadBuffer(outBuf, "image/png", "generated");
-        jobStore.set(codexTaskId, { status: "done", imageUrl });
+        jobStore.set(codexTaskId, { status: "done", imageUrl, userId: codexUserId });
 
         if (GUEST_MODE) {
           guestDb.insertGeneration({
@@ -508,7 +561,7 @@ export async function POST(req: NextRequest) {
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[codex] background error:", msg, e);
-        jobStore.set(codexTaskId, { status: "error", error: cleanCodexError(msg) });
+        jobStore.set(codexTaskId, { status: "error", error: cleanCodexError(msg), userId: codexUserId });
       }
     })();
 
@@ -522,26 +575,25 @@ export async function POST(req: NextRequest) {
   const callbackBase = process.env.CALLBACK_BASE_URL;
   // Guest/desktop mode polls kie.ai directly (see lib/kieJobPoller) so it needs
   // no public callback URL; hosted mode still requires one.
-  if (!callbackBase && !GUEST_MODE) {
+  if (!callbackBase && !GUEST_MODE && !MANAGED_MODE) {
     return NextResponse.json({ error: "CALLBACK_BASE_URL is not set" }, { status: 500 });
   }
 
-  const callBackUrl = callbackBase
-    ? `${callbackBase.replace(/\/$/, "")}/api/callback`
-    : undefined;
+  const callBackUrl = MANAGED_MODE
+    ? createKieCallbackUrl(HELIOS_PUBLIC_ORIGIN)
+    : callbackBase ? `${callbackBase.replace(/\/$/, "")}/api/callback` : undefined;
 
   try {
     const { apiInput } = cfg;
 
-    // ── Dual-mode models (e.g. GPT Image 2) ────────────────────────────────────
-    const hasImages = r2ImageUrls.length > 0;
+    const hasImages = MANAGED_MODE ? imageUrls.length > 0 : r2ImageUrls.length > 0;
     const resolvedApiId = !hasImages && cfg.textOnlyApiId ? cfg.textOnlyApiId : cfg.apiId;
 
-    // Desktop/guest without a tunnel: kie.ai can't fetch our local reference
-    // images, so push them to kie's temporary file store first.
+    // Kie must receive externally reachable references. Managed media is
+    // owner-checked first, then its storage URL is sent only server-side.
     let kieImageUrls = r2ImageUrls;
-    if (GUEST_MODE && hasImages) {
-      kieImageUrls = await ensureKieReachableImages(r2ImageUrls, kieToken);
+    if ((GUEST_MODE || MANAGED_MODE) && hasImages) {
+      kieImageUrls = await ensureKieReachableImages(kieImageUrls, kieToken, currentUserId);
     }
 
     const input: Record<string, unknown> = {
@@ -576,24 +628,24 @@ export async function POST(req: NextRequest) {
     const taskId = d.data?.taskId ?? d.data?.id ?? d.taskId ?? d.id;
     if (!taskId) throw new Error("No task ID in response");
 
-    jobStore.set(taskId, { status: "pending", userId: currentUserId ?? undefined });
+    jobStore.set(taskId, { status: "pending", type: "image", userId: currentUserId });
 
-    if (GUEST_MODE) {
+    if (GUEST_MODE || MANAGED_MODE) {
       guestDb.insertGeneration({
         task_id: taskId, user_id: currentUserId, generation_type: "image",
         status: "pending", prompt, model, aspect_ratio: aspectRatio, quality,
-        reference_image_urls: r2ImageUrls,
+        reference_image_urls: imageUrls,
       });
-      pollKieJob(taskId, kieToken, "image");
+      if (GUEST_MODE) pollKieJob(taskId, kieToken, "image");
     } else {
       supabaseAdmin.from("generations").insert({
-        task_id:              taskId,
-        user_id:              currentUserId,
-        generation_type:      "image",
-        status:               "pending",
+        task_id: taskId,
+        user_id: currentUserId,
+        generation_type: "image",
+        status: "pending",
         prompt,
         model,
-        aspect_ratio:         aspectRatio,
+        aspect_ratio: aspectRatio,
         quality,
         reference_image_urls: r2ImageUrls,
       }).then(({ error }) => {

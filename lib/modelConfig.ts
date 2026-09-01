@@ -342,6 +342,16 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
 ];
 
+export const DEFAULT_IMAGE_MODEL_ID = "nano-banana-2";
+export const MANAGED_IMAGE_MODEL_ID = "gpt-image-2";
+
+export function getDefaultImageModelId(managed = (
+  process.env.SUB2API_MANAGED_MODE === "true" ||
+  process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true"
+)): string {
+  return managed ? MANAGED_IMAGE_MODEL_ID : DEFAULT_IMAGE_MODEL_ID;
+}
+
 // ── Video models ──────────────────────────────────────────────────────────────
 
 export type VideoHandle = "prompt" | "startFrame" | "endFrame" | "resource" | "videoRef" | "referenceVideo" | "audioRef";

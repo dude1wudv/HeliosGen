@@ -1,79 +1,44 @@
-/**
- * GET /api/thumb?url=<r2-url>&w=<width>
- *
- * Fetches an image from our R2 CDN with proper browser headers (avoiding
- * Cloudflare bot-detection ECONNRESET) and resizes it with sharp.
- * Drop-in replacement for /_next/image for R2 URLs.
- */
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
+import { resolveUserId } from "@/lib/guestMode";
+import { getMediaAsset } from "@/lib/guest/db";
+import { fetchSafeBuffer } from "@/lib/ssrf";
+import { readManagedMediaAsset } from "@/lib/managedMedia";
 
 export const runtime = "nodejs";
-
-const R2_BASE = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
-
 const ALLOWED_WIDTHS = new Set([16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840]);
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = req.nextUrl;
-  const url = searchParams.get("url");
-  const wParam = Number(searchParams.get("w") ?? "384");
-
-  if (!url) return new NextResponse("Missing url", { status: 400 });
-  if (!R2_BASE || !url.startsWith(R2_BASE)) {
-    return new NextResponse("Forbidden", { status: 403 });
+  const urlParam = req.nextUrl.searchParams.get("url");
+  if (!urlParam) return new NextResponse("Missing url", { status: 400 });
+  const userId = await resolveUserId(req);
+  if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+  const url = urlParam;
+  let contentType = "";
+  let localBuffer: Buffer | null = null;
+  if (urlParam.startsWith("/api/media/")) {
+    const id = urlParam.slice("/api/media/".length).split(/[?#/]/, 1)[0];
+    const asset = id ? getMediaAsset(id, userId) : null;
+    if (!asset) return new NextResponse("Not found", { status: 404 });
+    localBuffer = await readManagedMediaAsset(asset, 30 * 1024 * 1024);
+    contentType = asset.mime_type;
   }
-
-  const w = ALLOWED_WIDTHS.has(wParam) ? wParam : 384;
-
-  let upstream: Response;
+  const widthParam = Number(req.nextUrl.searchParams.get("w") ?? "384");
+  const width = ALLOWED_WIDTHS.has(widthParam) ? widthParam : 384;
   try {
-    upstream = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-      },
-    });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[thumb] fetch failed:", msg);
+    const fetched = localBuffer
+      ? { buffer: localBuffer, contentType }
+      : await fetchSafeBuffer(url, { maxBytes: 30 * 1024 * 1024, timeoutMs: 15_000 });
+    contentType ||= fetched.contentType.split(";", 1)[0];
+    if (!contentType.startsWith("image/")) return new NextResponse("Not an image", { status: 415 });
+    const buffer = fetched.buffer;
+    try {
+      const optimized = await sharp(buffer).rotate().resize(width, undefined, { withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+      return new NextResponse(Uint8Array.from(optimized), { headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=3600", Vary: "Accept" } });
+    } catch {
+      return new NextResponse(Uint8Array.from(buffer), { headers: { "Content-Type": contentType, "Cache-Control": "private, max-age=3600" } });
+    }
+  } catch {
     return new NextResponse("Upstream fetch failed", { status: 502 });
   }
-
-  if (!upstream.ok) {
-    return new NextResponse("Upstream error", { status: upstream.status });
-  }
-
-  const contentType = upstream.headers.get("content-type") ?? "";
-  if (!contentType.startsWith("image/")) {
-    return new NextResponse("Not an image", { status: 415 });
-  }
-
-  const buffer = Buffer.from(await upstream.arrayBuffer());
-
-  let optimized: Buffer;
-  try {
-    optimized = await sharp(buffer)
-      .rotate()
-      .resize(w, undefined, { withoutEnlargement: true })
-      .webp({ quality: 80 })
-      .toBuffer();
-  } catch {
-    // If sharp fails, serve the original
-    return new NextResponse(buffer as unknown as BodyInit, {
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
-    });
-  }
-
-  return new NextResponse(optimized as unknown as BodyInit, {
-    headers: {
-      "Content-Type": "image/webp",
-      "Cache-Control": "public, max-age=31536000, immutable",
-      "Vary": "Accept",
-    },
-  });
 }

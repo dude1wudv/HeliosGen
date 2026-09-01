@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+coverage
+data
+public/generated
+tmp
+*.log
+.env
+.env.*
+!.env.example
+!.env.guest

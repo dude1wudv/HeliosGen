@@ -6,6 +6,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { uploadBuffer } from "@/lib/r2";
+import { resolveUserId } from "@/lib/guestMode";
+import { fetchSafeBuffer } from "@/lib/ssrf";
 import { writeFile, readFile, unlink, mkdtemp } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -19,24 +21,17 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest) {
   let inputPath: string | null  = null;
   let outputPath: string | null = null;
-
   try {
     const { videoUrl, startTime, endTime } = await req.json();
-
+    const userId = await resolveUserId(req);
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!videoUrl || startTime === undefined || endTime === undefined) {
       return NextResponse.json({ error: "videoUrl, startTime and endTime are required" }, { status: 400 });
     }
-    if (endTime <= startTime) {
-      return NextResponse.json({ error: "endTime must be greater than startTime" }, { status: 400 });
-    }
-
-    // Download the video
-    const res = await fetch(videoUrl);
-    if (!res.ok) {
-      return NextResponse.json({ error: `Failed to fetch video: ${res.status}` }, { status: 400 });
-    }
-    const videoBuffer = Buffer.from(await res.arrayBuffer());
-    const contentType = res.headers.get("content-type") ?? "video/mp4";
+    if (endTime <= startTime) return NextResponse.json({ error: "endTime must be greater than startTime" }, { status: 400 });
+    const fetched = await fetchSafeBuffer(videoUrl, { maxBytes: 100 * 1024 * 1024, timeoutMs: 30_000 });
+    const videoBuffer = fetched.buffer;
+    const contentType = fetched.contentType || "video/mp4";
 
     // Write to temp files
     const tmpDir  = await mkdtemp(join(tmpdir(), "trim-"));
@@ -56,7 +51,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     const outputBuffer = await readFile(outputPath);
-    const cdnUrl = await uploadBuffer(outputBuffer, contentType.startsWith("video/") ? contentType : "video/mp4", "references");
+    const cdnUrl = await uploadBuffer(outputBuffer, contentType.startsWith("video/") ? contentType : "video/mp4", "references", userId);
 
     return NextResponse.json({ cdnUrl });
   } catch (e: unknown) {

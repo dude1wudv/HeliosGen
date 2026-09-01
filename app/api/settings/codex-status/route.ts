@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
+import { existsSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
+import { spawn } from "child_process";
+import { MANAGED_MODE } from "@/lib/managedMode";
 /**
- * codex-imagegen has no per-user credentials to save from the browser — it's a
- * single shared `codex login` session on this host. This just reports whether
- * that host-level setup is in place, for the "READY / NOT CONFIGURED" badge.
+ * The desktop-only Codex provider is never exposed by managed deployments.
  */
 function binaryOnPath(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -18,6 +16,7 @@ function binaryOnPath(): Promise<boolean> {
 }
 
 export async function GET() {
+  if (MANAGED_MODE) return NextResponse.json({ error: "provider_unavailable", code: "provider_unavailable" }, { status: 403 });
   const authPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json");
   const [installed, authFound] = await Promise.all([
     binaryOnPath(),

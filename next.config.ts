@@ -5,10 +5,11 @@ import type { NextConfig } from "next";
 // self-contained `.next/standalone` server as a bundled sidecar. Web/Vercel
 // builds leave this unset and keep the default output.
 const DESKTOP_BUILD = process.env.DESKTOP_BUILD === "1";
+const STANDALONE_BUILD = DESKTOP_BUILD || process.env.SUB2API_MANAGED_MODE === "true";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.64.2"],
-  ...(DESKTOP_BUILD ? { output: "standalone" as const } : {}),
+  ...(STANDALONE_BUILD ? { output: "standalone" as const } : {}),
   turbopack: {
     root: path.join(__dirname),
   },

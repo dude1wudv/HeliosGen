@@ -16,8 +16,8 @@ import { browserNotify, requestNotificationPermission } from "@/lib/browserNotif
 type GenerateNodeType = Node<NodeData, "generateNode">;
 
 import { ShieldBan } from "lucide-react";
-import { IMAGE_MODELS, AZURE_POPULAR_SIZES, validateAzureCustomSize } from "@/lib/modelConfig";
-import { PROVIDERS, ProviderId, getModelProvider, setModelProvider, modelHasProviderChoice } from "@/lib/providers";
+import { IMAGE_MODELS, AZURE_POPULAR_SIZES, validateAzureCustomSize, getDefaultImageModelId } from "@/lib/modelConfig";
+import { PROVIDERS, type ProviderId, getModelProvider, setModelProvider, modelHasProviderChoice } from "@/lib/providers";
 import { useGeneratingBorderAnimation } from "@/lib/useGeneratingBorderAnimation";
 import MissingInputWarning from "./MissingInputWarning";
 
@@ -374,13 +374,13 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
     });
   }, [id, updateNodeData]);
 
-  const model = (data.model as string) ?? "nano-banana-2";
+  const model = (data.model as string) ?? getDefaultImageModelId();
   const caps = MODEL_CAPS[model] ?? DEFAULT_CAPS;
   const modelInfo = MODELS.find((m) => m.id === model) ?? MODELS[0];
   const quality = (data.quality as string) ?? "1k";
   const status = data.status ?? "idle";
 
-  const [currentProvider, setCurrentProvider] = useState<ProviderId>("kie");
+  const [currentProvider, setCurrentProvider] = useState<ProviderId>(() => getModelProvider(model));
   useEffect(() => {
     const read = () => setCurrentProvider(getModelProvider(model));
     read();

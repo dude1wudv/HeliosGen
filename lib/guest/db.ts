@@ -116,6 +116,7 @@ export function insertGeneration(data: Omit<Generation, "id" | "created_at" | "u
 
 export function updateGeneration(
   taskId: string,
+  userId: string,
   updates: Partial<Pick<Generation, "status" | "image_url" | "image_urls" | "video_url" | "error_msg">>,
 ): void {
   const sets: string[] = ["updated_at = ?"];
@@ -125,14 +126,15 @@ export function updateGeneration(
   if ("image_urls" in updates) { sets.push("image_urls = ?"); vals.push(updates.image_urls ? JSON.stringify(updates.image_urls) : null); }
   if ("video_url" in updates) { sets.push("video_url = ?"); vals.push(updates.video_url ?? null); }
   if ("error_msg" in updates) { sets.push("error_msg = ?"); vals.push(updates.error_msg ?? null); }
-  vals.push(taskId);
-  db().prepare(`UPDATE generations SET ${sets.join(", ")} WHERE task_id = ?`).run(...(vals as never[]));
+  vals.push(taskId, userId);
+  db().prepare(`UPDATE generations SET ${sets.join(", ")} WHERE task_id = ? AND user_id = ?`).run(...(vals as never[]));
 }
 
 export function recoverJob(
   taskId: string,
+  userId: string,
 ): Pick<Generation, "status" | "video_url" | "image_url" | "image_urls" | "error_msg"> | null {
-  const r = db().prepare("SELECT * FROM generations WHERE task_id = ?").get(taskId) as GenRow | undefined;
+  const r = db().prepare("SELECT * FROM generations WHERE task_id = ? AND user_id = ?").get(taskId, userId) as GenRow | undefined;
   return r ? rowToGeneration(r) : null;
 }
 
@@ -221,35 +223,38 @@ function deleteSetting(key: string): void {
   db().prepare("DELETE FROM settings WHERE key = ?").run(key);
 }
 
-export function getKieApiToken(): string | null {
-  const dbToken = getSetting("kie_api_token");
+export function getKieApiToken(userId?: string): string | null {
+  const dbToken = userId ? getUserSetting(userId, "kie_api_token") : getSetting("kie_api_token");
   if (dbToken) return dbToken;
   const envToken = process.env.KIE_API_KEY ?? "";
   if (!envToken || envToken === "your_kie_api_key_here") return null;
   return envToken;
 }
 
-export function setKieApiToken(token: string): void {
-  setSetting("kie_api_token", token);
+export function setKieApiToken(token: string, userId?: string): void {
+  if (userId) setUserSetting(userId, "kie_api_token", token);
+  else setSetting("kie_api_token", token);
 }
 
-export function deleteKieApiToken(): void {
-  deleteSetting("kie_api_token");
+export function deleteKieApiToken(userId?: string): void {
+  if (userId) deleteUserSetting(userId, "kie_api_token");
+  else deleteSetting("kie_api_token");
 }
 
-export function getAzureApiKey(): string | null {
-  const dbKey = getSetting("azure_api_key");
+export function getAzureApiKey(userId?: string): string | null {
+  const dbKey = userId ? getUserSetting(userId, "azure_api_key") : getSetting("azure_api_key");
   if (dbKey) return dbKey;
-  const envKey = process.env.AZURE_API_KEY ?? "";
-  return envKey || null;
+  return process.env.AZURE_API_KEY || null;
 }
 
-export function setAzureApiKey(key: string): void {
-  setSetting("azure_api_key", key);
+export function setAzureApiKey(key: string, userId?: string): void {
+  if (userId) setUserSetting(userId, "azure_api_key", key);
+  else setSetting("azure_api_key", key);
 }
 
-export function deleteAzureApiKey(): void {
-  deleteSetting("azure_api_key");
+export function deleteAzureApiKey(userId?: string): void {
+  if (userId) deleteUserSetting(userId, "azure_api_key");
+  else deleteSetting("azure_api_key");
 }
 
 // ── Folders ────────────────────────────────────────────────────────────────
@@ -304,7 +309,7 @@ export function deleteFolder(id: string, userId: string): void {
   const d = db();
   d.exec("BEGIN");
   d.prepare("DELETE FROM folders WHERE id = ? AND user_id = ?").run(id, userId);
-  d.prepare("DELETE FROM folder_items WHERE folder_id = ?").run(id);
+  d.prepare("DELETE FROM folder_items WHERE folder_id = ? AND user_id = ?").run(id, userId);
   d.exec("COMMIT");
 }
 
@@ -337,4 +342,54 @@ export function deleteFolderItems(folderId: string, itemIds: string[], userId: s
   db()
     .prepare(`DELETE FROM folder_items WHERE folder_id = ? AND user_id = ? AND item_id IN (${placeholders})`)
     .run(folderId, userId, ...itemIds);
+}
+
+// ── Per-user settings and media ────────────────────────────────────────────
+
+export function getUserSetting(userId: string, key: string): string | null {
+  const row = db().prepare("SELECT value FROM user_settings WHERE user_id = ? AND key = ?").get(userId, key) as
+    | { value: string | null } | undefined;
+  return row?.value ?? null;
+}
+
+export function setUserSetting(userId: string, key: string, value: string): void {
+  db().prepare(`
+    INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)
+    ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value
+  `).run(userId, key, value);
+}
+
+export function deleteUserSetting(userId: string, key: string): void {
+  db().prepare("DELETE FROM user_settings WHERE user_id = ? AND key = ?").run(userId, key);
+}
+
+export interface MediaAsset {
+  id: string;
+  user_id: string;
+  path: string;
+  mime_type: string;
+  sha256: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export function getMediaAsset(id: string, userId: string): MediaAsset | null {
+  const row = db().prepare("SELECT * FROM media_assets WHERE id = ? AND user_id = ?").get(id, userId) as
+    | MediaAsset | undefined;
+  return row ?? null;
+}
+
+export function findMediaAssetByHash(userId: string, sha256: string): MediaAsset | null {
+  const row = db().prepare("SELECT * FROM media_assets WHERE user_id = ? AND sha256 = ?").get(userId, sha256) as
+    | MediaAsset | undefined;
+  return row ?? null;
+}
+
+export function insertMediaAsset(data: Omit<MediaAsset, "created_at">): MediaAsset {
+  const asset = { ...data, created_at: now() };
+  db().prepare(`
+    INSERT INTO media_assets (id, user_id, path, mime_type, sha256, size_bytes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(asset.id, asset.user_id, asset.path, asset.mime_type, asset.sha256, asset.size_bytes, asset.created_at);
+  return asset;
 }

@@ -7,6 +7,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { VIDEO_MODELS } from "@/lib/modelConfig";
 import { getKieTokenForUser } from "@/lib/getKieToken";
 import { GUEST_MODE, resolveUserId } from "@/lib/guestMode";
+import { HELIOS_PUBLIC_ORIGIN, MANAGED_MODE } from "@/lib/managedMode";
+import { createKieCallbackUrl } from "@/lib/mediaSignature";
 import * as guestDb from "@/lib/guest/db";
 
 const KIE_BASE = "https://api.kie.ai";
@@ -48,14 +50,16 @@ export async function POST(req: NextRequest) {
     callBackUrl:    rawCallBackUrl,
     debugOnly       = false,
   } = body;
-
   const userId = await resolveUserId(req);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const apiKey = (userId ? await getKieTokenForUser(userId) : null) ?? process.env.KIE_API_TOKEN ?? null;
+  const apiKey = await getKieTokenForUser(userId);
   if (!apiKey) return NextResponse.json({ error: "No Kie.ai API key configured. Add one in Settings." }, { status: 401 });
 
   const callbackBase = process.env.CALLBACK_BASE_URL;
-  const callBackUrl = rawCallBackUrl || (callbackBase ? `${callbackBase.replace(/\/$/, "")}/api/callback` : undefined);
+  const callBackUrl = MANAGED_MODE
+    ? createKieCallbackUrl(HELIOS_PUBLIC_ORIGIN)
+    : rawCallBackUrl || (callbackBase ? `${callbackBase.replace(/\/$/, "")}/api/callback` : undefined);
   // Guest/desktop mode polls kie.ai directly (lib/kieJobPoller) — no callback URL needed.
   if (!callBackUrl && !GUEST_MODE) {
     return NextResponse.json({ error: "callBackUrl or CALLBACK_BASE_URL not set" }, { status: 500 });
@@ -83,8 +87,8 @@ export async function POST(req: NextRequest) {
     // ── Kling 2.6 motion control ──────────────────────────────────────────────
     // { prompt, input_urls, video_urls, mode, character_orientation }
     const [inputImageUrl, inputVideoUrl] = await Promise.all([
-      rawStartFrame ? ensureR2(rawStartFrame, "references").catch(() => rawStartFrame) : Promise.resolve(undefined),
-      rawVideoRef   ? ensureR2(rawVideoRef,   "references").catch(() => rawVideoRef)   : Promise.resolve(undefined),
+      rawStartFrame ? ensureR2(rawStartFrame, "references", userId).catch(() => rawStartFrame) : Promise.resolve(undefined),
+      rawVideoRef   ? ensureR2(rawVideoRef, "references", userId).catch(() => rawVideoRef)   : Promise.resolve(undefined),
     ]);
 
     input = {
@@ -99,11 +103,11 @@ export async function POST(req: NextRequest) {
   } else if (apiInput.firstFrameKey) {
     // ── Seedance-style models (separate frame keys + multi-ref arrays) ─────────
     const [startFrameUrl, endFrameUrl, r2RefImages, r2RefVideos, r2RefAudios] = await Promise.all([
-      rawStartFrame ? ensureR2(rawStartFrame, "references").catch(() => rawStartFrame) : Promise.resolve(undefined),
-      rawEndFrame   ? ensureR2(rawEndFrame,   "references").catch(() => rawEndFrame)   : Promise.resolve(undefined),
-      Promise.all((rawRefImages    as string[]).map((u) => ensureR2(u, "references").catch(() => u))),
-      Promise.all((rawRefVideoUrls as string[]).map((u) => ensureR2(u, "references").catch(() => u))),
-      Promise.all((rawRefAudioUrls as string[]).map((u) => ensureR2(u, "references").catch(() => u))),
+      rawStartFrame ? ensureR2(rawStartFrame, "references", userId).catch(() => rawStartFrame) : Promise.resolve(undefined),
+      rawEndFrame   ? ensureR2(rawEndFrame, "references", userId).catch(() => rawEndFrame)   : Promise.resolve(undefined),
+      Promise.all((rawRefImages    as string[]).map((u) => ensureR2(u, "references", userId).catch(() => u))),
+      Promise.all((rawRefVideoUrls as string[]).map((u) => ensureR2(u, "references", userId).catch(() => u))),
+      Promise.all((rawRefAudioUrls as string[]).map((u) => ensureR2(u, "references", userId).catch(() => u))),
     ]);
 
     input = {
@@ -126,12 +130,12 @@ export async function POST(req: NextRequest) {
     // ── HappyHorse (Alibaba) — routes to text/image/reference endpoint ────────
     const refImageUrls = (
       await Promise.all(
-        (rawRefImages as string[]).map((u) => ensureR2(u, "references").catch(() => null))
+        (rawRefImages as string[]).map((u) => ensureR2(u, "references", userId).catch(() => null))
       )
     ).filter((u): u is string => u !== null);
 
     const startFrameUrl = rawStartFrame
-      ? await ensureR2(rawStartFrame, "references").catch(() => rawStartFrame)
+      ? await ensureR2(rawStartFrame, "references", userId).catch(() => rawStartFrame)
       : undefined;
 
     const maybeSeed = seed !== undefined && seed !== null && Number(seed) > 0 ? Number(seed) : undefined;
@@ -169,7 +173,7 @@ export async function POST(req: NextRequest) {
   } else if (apiInput.useKlingTurbo) {
     // ── Kling 3.0 Turbo (text-to-video / image-to-video) ─────────────────────
     const startFrameUrl = rawStartFrame
-      ? await ensureR2(rawStartFrame, "references").catch(() => rawStartFrame)
+      ? await ensureR2(rawStartFrame, "references", userId).catch(() => rawStartFrame)
       : undefined;
 
     const durationValue = String(clampedDuration);
@@ -195,9 +199,9 @@ export async function POST(req: NextRequest) {
   } else if (apiInput.useGoogleVeo) {
     // ── Google Veo 3.1 ───────────────────────────────────────────────────────
     const [startFrameUrl, endFrameUrl, refImages] = await Promise.all([
-      rawStartFrame ? ensureR2(rawStartFrame, "references").catch(() => rawStartFrame) : Promise.resolve(undefined),
-      rawEndFrame   ? ensureR2(rawEndFrame,   "references").catch(() => rawEndFrame)   : Promise.resolve(undefined),
-      Promise.all((rawRefImages as string[]).map((u) => ensureR2(u, "references").catch(() => u))),
+      rawStartFrame ? ensureR2(rawStartFrame, "references", userId).catch(() => rawStartFrame) : Promise.resolve(undefined),
+      rawEndFrame   ? ensureR2(rawEndFrame, "references", userId).catch(() => rawEndFrame)   : Promise.resolve(undefined),
+      Promise.all((rawRefImages as string[]).map((u) => ensureR2(u, "references", userId).catch(() => u))),
     ]);
 
     const imageUrls: string[] = [];
@@ -236,10 +240,10 @@ export async function POST(req: NextRequest) {
   } else if (apiInput.useGeminiOmniVideo) {
     // ── Gemini Omni Video (quota-based: image=1 slot, video=2 slots, max 7) ────
     const r2RefImages = await Promise.all(
-      (rawRefImages as string[]).map((u) => ensureR2(u, "references").catch(() => u))
+      (rawRefImages as string[]).map((u) => ensureR2(u, "references", userId).catch(() => u))
     );
     const r2RefVideos = await Promise.all(
-      (rawRefVideoUrls as string[]).slice(0, 1).map((u) => ensureR2(u, "references").catch(() => u))
+      (rawRefVideoUrls as string[]).slice(0, 1).map((u) => ensureR2(u, "references", userId).catch(() => u))
     );
 
     const videoSlots = r2RefVideos.length > 0 ? 2 : 0;
@@ -260,7 +264,7 @@ export async function POST(req: NextRequest) {
     // ── Reference-image-based models (Grok Imagine, Grok Imagine 1.5) ─────────
     const refImageUrls = (
       await Promise.all(
-        (rawRefImages as string[]).map((u) => ensureR2(u, "references").catch(() => null))
+        (rawRefImages as string[]).map((u) => ensureR2(u, "references", userId).catch(() => null))
       )
     ).filter((u): u is string => u !== null);
 
@@ -285,14 +289,14 @@ export async function POST(req: NextRequest) {
     const hasNewElements = (klingElements as KlingElementInput[]).length > 0;
 
     const [startFrameUrl, endFrameUrl, r2Resources, uploadedElements] = await Promise.all([
-      rawStartFrame ? ensureR2(rawStartFrame, "references") : Promise.resolve(undefined),
-      rawEndFrame   ? ensureR2(rawEndFrame,   "references") : Promise.resolve(undefined),
+      rawStartFrame ? ensureR2(rawStartFrame, "references", userId) : Promise.resolve(undefined),
+      rawEndFrame   ? ensureR2(rawEndFrame, "references", userId) : Promise.resolve(undefined),
       hasNewElements
         ? Promise.resolve([] as Resource[])
         : Promise.all(
             (resources as Resource[]).slice(0, 3).map(async (r) => ({
               ...r,
-              url: await ensureR2(r.url, "references").catch(() => r.url),
+              url: await ensureR2(r.url, "references", userId).catch(() => r.url),
             }))
           ),
       hasNewElements
@@ -301,7 +305,7 @@ export async function POST(req: NextRequest) {
               name:        el.name,
               description: el.description,
               imageUrls:   await Promise.all(
-                el.imageUrls.map((u) => ensureR2(u, "references").catch(() => u))
+                el.imageUrls.map((u) => ensureR2(u, "references", userId).catch(() => u))
               ),
             }))
           )
@@ -344,10 +348,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Desktop/guest without a tunnel: kie.ai can't fetch our local reference
-  // media, so re-host any /generated or data: URLs in the payload first.
-  if (GUEST_MODE) {
+  if (GUEST_MODE || MANAGED_MODE) {
     try {
-      await rewriteLocalMediaForKie(input, apiKey);
+      await rewriteLocalMediaForKie(input, apiKey, userId);
     } catch (e) {
       return NextResponse.json(
         { error: `Couldn't upload reference media to kie.ai: ${(e as Error).message}` },
@@ -404,9 +407,7 @@ export async function POST(req: NextRequest) {
   const taskId = created.data?.taskId || created.data?.id;
   if (!taskId) return NextResponse.json({ error: "No taskId returned" }, { status: 500 });
 
-  // Register as pending so the frontend can poll job-status
-  jobStore.set(taskId, { status: "pending", type: "video", userId: userId ?? undefined });
-
+  jobStore.set(taskId, { status: "pending", type: "video", userId });
   // Save to Supabase (fire-and-forget)
 
   const referenceUrls: string[] = apiInput.useMotionControl
@@ -427,7 +428,7 @@ export async function POST(req: NextRequest) {
           ?.map((el) => el.element_input_urls[0]) ?? []),
       ];
 
-  if (GUEST_MODE) {
+  if (GUEST_MODE || MANAGED_MODE) {
     guestDb.insertGeneration({
       task_id: taskId, user_id: userId, generation_type: "video",
       status: "pending", model: videoModel, prompt, aspect_ratio: effectiveAspectRatio,
@@ -435,23 +436,25 @@ export async function POST(req: NextRequest) {
       sound: cfg.sound ? Boolean(sound) : false,
       reference_image_urls: referenceUrls,
     });
-    if (apiInput.useGoogleVeo) {
-      console.warn("[generate-video] Veo has no jobs-API polling yet — result needs a callback URL");
-    } else {
-      pollKieJob(taskId, apiKey, "video");
+    if (GUEST_MODE) {
+      if (apiInput.useGoogleVeo) {
+        console.warn("[generate-video] Veo has no jobs-API polling yet — result needs a callback URL");
+      } else {
+        pollKieJob(taskId, apiKey, "video");
+      }
     }
   } else {
     supabaseAdmin.from("generations").insert({
-      task_id:              taskId,
-      user_id:              userId,
-      generation_type:      "video",
-      status:               "pending",
-      model:                videoModel,
+      task_id: taskId,
+      user_id: userId,
+      generation_type: "video",
+      status: "pending",
+      model: videoModel,
       prompt,
-      aspect_ratio:         effectiveAspectRatio,
-      duration:             clampedDuration,
-      kling_mode:           mode,
-      sound:                cfg.sound ? Boolean(sound) : false,
+      aspect_ratio: effectiveAspectRatio,
+      duration: clampedDuration,
+      kling_mode: mode,
+      sound: cfg.sound ? Boolean(sound) : false,
       reference_image_urls: referenceUrls,
     }).then(({ error }) => {
       if (error) console.error("[generate-video] supabase insert error:", error.message);

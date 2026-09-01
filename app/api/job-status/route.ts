@@ -2,22 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { jobStore } from "@/lib/jobStore";
 import { resumeKieJob } from "@/lib/kieJobPoller";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { GUEST_MODE } from "@/lib/guestMode";
+import { GUEST_MODE, resolveUserId } from "@/lib/guestMode";
+import { MANAGED_MODE } from "@/lib/managedMode";
 import * as guestDb from "@/lib/guest/db";
 
-async function recoverJob(taskId: string): Promise<"done" | "error" | "pending" | "not_found"> {
-  if (GUEST_MODE) {
-    const gen = guestDb.recoverJob(taskId);
+async function recoverJob(taskId: string, userId: string): Promise<"done" | "error" | "pending" | "not_found"> {
+  if (GUEST_MODE || MANAGED_MODE) {
+    const gen = guestDb.recoverJob(taskId, userId);
     if (!gen) return "not_found";
     if (gen.status === "done") {
       const result = gen.video_url
-        ? { status: "done" as const, videoUrl: gen.video_url }
-        : { status: "done" as const, imageUrl: gen.image_url ?? undefined, imageUrls: gen.image_urls ?? undefined };
+        ? { status: "done" as const, videoUrl: gen.video_url, userId }
+        : { status: "done" as const, imageUrl: gen.image_url ?? undefined, imageUrls: gen.image_urls ?? undefined, userId };
       jobStore.set(taskId, result);
       return "done";
     }
     if (gen.status === "error") {
-      jobStore.set(taskId, { status: "error", error: gen.error_msg ?? "Generation failed" });
+      jobStore.set(taskId, { status: "error", error: gen.error_msg ?? "Generation failed", userId });
       return "error";
     }
     return "pending";
@@ -27,59 +28,42 @@ async function recoverJob(taskId: string): Promise<"done" | "error" | "pending" 
     .from("generations")
     .select("status, video_url, image_url, image_urls, error_msg")
     .eq("task_id", taskId)
+    .eq("user_id", userId)
     .single();
-
   if (!gen) return "not_found";
 
   if (gen.status === "done") {
     const result = gen.video_url
-      ? { status: "done" as const, videoUrl: gen.video_url }
-      : { status: "done" as const, imageUrl: gen.image_url, imageUrls: gen.image_urls };
+      ? { status: "done" as const, videoUrl: gen.video_url, userId }
+      : { status: "done" as const, imageUrl: gen.image_url, imageUrls: gen.image_urls, userId };
     jobStore.set(taskId, result);
     return "done";
   }
-
   if (gen.status === "error") {
-    jobStore.set(taskId, { status: "error", error: gen.error_msg ?? "Generation failed" });
+    jobStore.set(taskId, { status: "error", error: gen.error_msg ?? "Generation failed", userId });
     return "error";
   }
-
   return "pending";
 }
 
 export async function GET(req: NextRequest) {
   const taskId = req.nextUrl.searchParams.get("taskId");
-  if (!taskId) {
-    return NextResponse.json({ error: "taskId is required" }, { status: 400 });
-  }
+  const userId = await resolveUserId(req);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!taskId) return NextResponse.json({ error: "taskId is required" }, { status: 400 });
 
-  const result = jobStore.get(taskId);
-
-  // Task known to local store — return as-is, no kie.ai polling
+  const result = jobStore.getOwned(taskId, userId);
   if (result) {
-    // Desktop/guest: if a restart killed the background poller for a job that's
-    // still pending, restart it so the result can still land.
     if (GUEST_MODE && result.status === "pending" && !taskId.startsWith("azure-")) {
       resumeKieJob(taskId, result.type === "video" ? "video" : "image");
     }
     return NextResponse.json(result);
   }
 
-  // Task not in local store (server restarted / cold start).
-  // Azure jobs have no Supabase record and can't be recovered.
-  if (taskId.startsWith("azure-")) {
-    return NextResponse.json({ status: "not_found" });
-  }
-
-  const recovered = await recoverJob(taskId);
-
+  const recovered = await recoverJob(taskId, userId);
   if (recovered === "done" || recovered === "error") {
-    return NextResponse.json(jobStore.get(taskId)!);
+    return NextResponse.json(jobStore.getOwned(taskId, userId));
   }
-
-  if (recovered === "pending") {
-    return NextResponse.json({ status: "pending" });
-  }
-
-  return NextResponse.json({ status: "not_found" });
+  if (recovered === "pending") return NextResponse.json({ status: "pending" });
+  return NextResponse.json({ status: "not_found" }, { status: 404 });
 }

@@ -1,9 +1,5 @@
 import { db } from "./sqlite";
 
-/**
- * Guest-mode persistence for workflow "spaces" (node canvases). SQLite-backed
- * (see ./sqlite); the hosted app uses the Supabase `spaces` table instead.
- */
 export interface GuestSpace {
   id: string;
   name: string;
@@ -16,34 +12,34 @@ export interface GuestSpace {
   isPublic?: boolean;
 }
 
-export function getSpaces(): GuestSpace[] {
-  const rows = db().prepare("SELECT data FROM spaces ORDER BY updated_at ASC").all() as {
+export function getSpaces(userId: string): GuestSpace[] {
+  const rows = db().prepare("SELECT data FROM spaces WHERE user_id = ? ORDER BY updated_at ASC").all(userId) as {
     data: string;
   }[];
-  return rows
-    .map((r) => {
-      try {
-        return JSON.parse(r.data) as GuestSpace;
-      } catch {
-        return null;
-      }
-    })
-    .filter((s): s is GuestSpace => s !== null);
+  return rows.map((row) => {
+    try { return JSON.parse(row.data) as GuestSpace; }
+    catch { return null; }
+  }).filter((space): space is GuestSpace => space !== null);
 }
 
-export function saveSpaces(spaces: GuestSpace[]): void {
-  const d = db();
-  d.exec("BEGIN");
-  const keep = new Set(spaces.map((s) => s.id));
-  const upsert = d.prepare(`
-    INSERT INTO spaces (id, name, data, updated_at) VALUES (?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data, updated_at = excluded.updated_at
-  `);
-  for (const s of spaces) {
-    upsert.run(s.id, s.name ?? "Untitled", JSON.stringify(s), Number(s.updatedAt ?? s.createdAt ?? Date.now()));
+export function saveSpaces(userId: string, spaces: GuestSpace[]): void {
+  const database = db();
+  database.exec("BEGIN");
+  try {
+    const keep = new Set(spaces.map((space) => space.id));
+    const upsert = database.prepare(`
+      INSERT INTO spaces (id, user_id, name, data, updated_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, id) DO UPDATE SET name = excluded.name, data = excluded.data, updated_at = excluded.updated_at
+    `);
+    for (const space of spaces) {
+      upsert.run(space.id, userId, space.name ?? "Untitled", JSON.stringify(space), Number(space.updatedAt ?? space.createdAt ?? Date.now()));
+    }
+    const existing = database.prepare("SELECT id FROM spaces WHERE user_id = ?").all(userId) as { id: string }[];
+    const remove = database.prepare("DELETE FROM spaces WHERE user_id = ? AND id = ?");
+    for (const { id } of existing) if (!keep.has(id)) remove.run(userId, id);
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
   }
-  const existing = d.prepare("SELECT id FROM spaces").all() as { id: string }[];
-  const del = d.prepare("DELETE FROM spaces WHERE id = ?");
-  for (const { id } of existing) if (!keep.has(id)) del.run(id);
-  d.exec("COMMIT");
 }
