@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
+    "lint:critical": "eslint lib/jobStore.ts lib/useSpaceSync.ts tests",
     "test": "vitest run",
     "desktop:dev": "node scripts/desktop/dev.mjs",
     "desktop:build": "CI=true tauri build",

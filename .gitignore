@@ -43,6 +43,7 @@ yarn-error.log*
 next-env.d.ts
 .job-store.json
 .codex-login-store.json
+/resp.json
 
 # Guest mode — local DB and generated media
 /data/*.json

@@ -34,6 +34,9 @@ export function useSpaceSync() {
   // quit right after (e.g. a node resize) would otherwise lose it — the
   // pagehide/visibilitychange handler below flushes it immediately.
   const dirtyRef       = useRef(false);
+  const dirtySpacesRef = useRef<Map<string, Space>>(new Map());
+  const deletedSpaceIdsRef = useRef<Set<string>>(new Set());
+  const previousSpacesRef = useRef<Map<string, Space>>(new Map());
   // Set by requestWorkflowSync(); makes the next debounce-arm use IMMEDIATE_MS.
   const immediateRef   = useRef(false);
 
@@ -42,7 +45,7 @@ export function useSpaceSync() {
     // If hydration already finished before this effect ran (common in Next.js
     // where SSR renders hasHydrated()=false but client is already hydrated)
     if (useWorkflowStore.persist?.hasHydrated()) {
-      setHydrated(true);
+      queueMicrotask(() => setHydrated(true));
       return;
     }
     const unsub = useWorkflowStore.persist?.onFinishHydration(() => setHydrated(true));
@@ -129,6 +132,8 @@ export function useSpaceSync() {
         lastSyncedRef.current = now.getTime();
         setLastSyncedAt(now);
         setStatus("synced");
+        dirtyRef.current = false;
+        immediateRef.current = false;
       } catch {
         dirtyRef.current = true;
         setStatus("error");
@@ -142,8 +147,15 @@ export function useSpaceSync() {
 
     setStatus("syncing");
     try {
-      // Only persist spaces that have at least one node
-      const spacesToSave = useWorkflowStore.getState().spaces.filter((sp) => sp.nodes.length > 0);
+      const currentSpaces = useWorkflowStore.getState().spaces;
+      const dirtySnapshot = new Map(dirtySpacesRef.current);
+      const spacesToSave = currentSpaces.filter(
+        (sp) => dirtySnapshot.has(sp.id) && sp.nodes.length > 0
+      );
+      const deletedSnapshot = new Set(deletedSpaceIdsRef.current);
+      for (const sp of currentSpaces) {
+        if (dirtySnapshot.has(sp.id) && sp.nodes.length === 0) deletedSnapshot.add(sp.id);
+      }
 
       if (spacesToSave.length > 0) {
         const rows = spacesToSave.map((sp) => ({
@@ -171,18 +183,33 @@ export function useSpaceSync() {
         if (error) throw error;
       }
 
-      // Only count non-empty spaces as "existing" — empty ones are local-only
-      const currentIds = spacesToSave.map((sp) => sp.id);
-      await supabase
-        .from("spaces")
-        .delete()
-        .eq("user_id", session.user.id)
-        .not("id", "in", `(${currentIds.join(",")})`);
+      // Delete only spaces explicitly removed or made empty. The previous
+      // complement query rewrote/deleted against every space on every save.
+      if (deletedSnapshot.size > 0) {
+        const { error } = await supabase
+          .from("spaces")
+          .delete()
+          .eq("user_id", session.user.id)
+          .in("id", [...deletedSnapshot]);
+        if (error) throw error;
+      }
+
+      const latestById = new Map(useWorkflowStore.getState().spaces.map((sp) => [sp.id, sp]));
+      for (const [id, snapshot] of dirtySnapshot) {
+        if (latestById.get(id) === snapshot) dirtySpacesRef.current.delete(id);
+      }
+      for (const id of deletedSnapshot) {
+        if (!latestById.has(id) || latestById.get(id)?.nodes.length === 0) {
+          deletedSpaceIdsRef.current.delete(id);
+        }
+      }
 
       const now = new Date();
       lastSyncedRef.current = now.getTime();
       setLastSyncedAt(now);
       setStatus("synced");
+      dirtyRef.current = dirtySpacesRef.current.size > 0 || deletedSpaceIdsRef.current.size > 0;
+      immediateRef.current = false;
     } catch {
       dirtyRef.current = true;
       setStatus("error");
@@ -208,6 +235,21 @@ export function useSpaceSync() {
 
   useEffect(() => {
     if (!hydrated) return;
+    const previous = previousSpacesRef.current;
+    const current = new Map(spaces.map((space) => [space.id, space]));
+    for (const space of spaces) {
+      if (previous.get(space.id) !== space) {
+        dirtySpacesRef.current.set(space.id, space);
+        deletedSpaceIdsRef.current.delete(space.id);
+      }
+    }
+    for (const id of previous.keys()) {
+      if (!current.has(id)) {
+        dirtySpacesRef.current.delete(id);
+        deletedSpaceIdsRef.current.add(id);
+      }
+    }
+    previousSpacesRef.current = current;
     dirtyRef.current = true;
     syncDebounced();
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
