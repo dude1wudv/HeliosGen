@@ -15,10 +15,10 @@
 
 # ⬇️ Download
 
-**HeliosGen is a desktop app.** Grab the latest build for your OS from the
-releases page — no account, no server, no cloud setup:
+**HeliosGen is a desktop app.** The Releases page contains source releases and
+any desktop builds attached for a supported OS:
 
-### 👉 **[Download from the Releases page](https://github.com/SegFault42/HeliosGen/releases)**
+### 👉 **[Download from the Releases page](https://github.com/dude1wudv/HeliosGen/releases)**
 
 | OS | File |
 | --- | --- |
@@ -26,11 +26,11 @@ releases page — no account, no server, no cloud setup:
 | **Windows** | 🙋 **looking for a contributor to build & submit** — see below |
 | **Linux** | 🙋 **looking for a contributor to build & submit** — see below |
 
-> Only the builds actually attached to the latest release are available. macOS
-> is published today. **Tauri can't cross-compile, so Windows and Linux builds
-> need someone on those platforms** — if you can run `npm run desktop:build` on
-> Windows or Linux (see the **Build from source** section below), please open a
-> PR or attach the artifacts to an issue and we'll add them to the release.
+> Only builds actually attached to a release are available. **Tauri can't
+> cross-compile**, so each OS build must be produced on that platform. If you
+> can run `npm run desktop:build` on Windows or Linux (see the **Build from
+> source** section below), please open a PR or attach the artifacts to an issue
+> so they can be added to a release.
 
 The app is **not code-signed** yet:
 
@@ -249,7 +249,7 @@ Platform-specific system deps:
 ## Build
 
 ```bash
-git clone https://github.com/SegFault42/HeliosGen
+git clone https://github.com/dude1wudv/HeliosGen
 cd HeliosGen
 npm install
 npm run desktop:build
