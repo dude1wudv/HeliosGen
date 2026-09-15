@@ -34,6 +34,9 @@ export interface NodeData extends Record<string, unknown> {
   status?: NodeStatus;
   // shared
   prompt?: string;
+  textMode?: "text" | "json" | "yaml";
+  // comment / sticky-note node
+  comment?: string;
   // generate node
   mode?: GenerateMode;
   model?: string;
@@ -92,6 +95,7 @@ export function getNodeLabel(type: string, n: number): string {
     imageInputNode:      `Image #${n}`,
     generateNode:        `Image Generator #${n}`,
     videoGeneratorNode:  `Video Generator #${n}`,
+    commentNode:         `Comment #${n}`,
   };
   return map[type] ?? `Node #${n}`;
 }
@@ -244,7 +248,7 @@ interface WorkflowStore {
 
 export const useWorkflowStore = create<WorkflowStore>()(
   persist(
-    (set) => {
+    (set, get) => {
       const defaultSpace = makeSpace("Space 1");
 
       return {
@@ -576,7 +580,14 @@ export const useWorkflowStore = create<WorkflowStore>()(
             };
           }),
 
-        updateNodeSize: (id, width, height) =>
+        updateNodeSize: (id, width, height) => {
+          // ResizeObserver can emit collapsed or non-finite measurements during teardown.
+          if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+
+          // Avoid rearming persistence/sync for unchanged layout measurements.
+          const current = get().nodes.find((n) => n.id === id);
+          if (current && current.width === width && current.height === height) return;
+
           set((s) => {
             const GROUP_PADDING = 24;
 
@@ -624,7 +635,8 @@ export const useWorkflowStore = create<WorkflowStore>()(
               nodes,
               spaces: syncSpace(s.spaces, s.activeSpaceId, nodes, s.edges, s.nodeCounters),
             };
-          }),
+          });
+        },
 
         setIsRunning:     (v) => set({ isRunning: v }),
         toggleDebug:      () => set((s) => ({ debugMode: !s.debugMode })),

@@ -1,6 +1,6 @@
 {
   "name": "heliosgen",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "private": true,
   "packageManager": "pnpm@9.15.9",
   "scripts": {
@@ -11,15 +11,13 @@
     "lint:critical": "eslint lib/jobStore.ts lib/useSpaceSync.ts tests",
     "test": "vitest run",
     "desktop:dev": "node scripts/desktop/dev.mjs",
-    "desktop:build": "CI=true tauri build",
+    "desktop:check-version": "node scripts/desktop/check-version.mjs",
+    "desktop:build": "node scripts/desktop/check-version.mjs && CI=true tauri build",
     "desktop:icon": "tauri icon",
     "tauri": "tauri"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1029.0",
     "@base-ui/react": "^1.4.1",
-    "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.103.0",
     "@xyflow/react": "^12.10.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -340,6 +340,46 @@ export const IMAGE_MODELS: ImageModel[] = [
       extra: { nsfw_checker: false },
     },
   },
+  {
+    id: "gpt-image-2-5-flare",
+    // apiId used when images ARE attached (image-to-image)
+    apiId: "gpt-image-2-5-flare-image-to-image",
+    // apiId used when NO images are attached (text-to-image)
+    textOnlyApiId: "gpt-image-2-5-flare-text-to-image",
+    name: "GPT Image 2.5 Flare",
+    provider: "OpenAI",
+    ratios: ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "16:27", "9:8", "8:9"],
+    supportsImages: true,
+    maxImages: 16,
+    supportsQuality: true,
+    apiInput: {
+      aspectRatioKey: "aspect_ratio",
+      imageInputKey: "input_urls",
+      qualityKey: "resolution",
+      qualityOptions: ["1k", "2k", "4k"],
+      promptMaxLength: 20000,
+    },
+  },
+  {
+    id: "gpt-image-2-5-sunburst",
+    // apiId used when images ARE attached (image-to-image)
+    apiId: "gpt-image-2-5-sunburst-image-to-image",
+    // apiId used when NO images are attached (text-to-image)
+    textOnlyApiId: "gpt-image-2-5-sunburst-text-to-image",
+    name: "GPT Image 2.5 Sunburst",
+    provider: "OpenAI",
+    ratios: ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "16:27", "9:8", "8:9"],
+    supportsImages: true,
+    maxImages: 16,
+    supportsQuality: true,
+    apiInput: {
+      aspectRatioKey: "aspect_ratio",
+      imageInputKey: "input_urls",
+      qualityKey: "resolution",
+      qualityOptions: ["1k", "2k", "4k"],
+      promptMaxLength: 20000,
+    },
+  },
 ];
 
 export const DEFAULT_IMAGE_MODEL_ID = "nano-banana-2";
@@ -467,6 +507,16 @@ export interface VideoModel {
      * - without image → apiId (t2v), sends prompt + duration + aspect_ratio + resolution
      */
     useKlingTurbo?: boolean;
+    /**
+     * When true, routes three ways (frames win over references):
+     * - first/last frame → imageApiId (i2v): prompt + first_frame_url / last_frame_url
+     *   + duration + resolution, no aspect_ratio
+     * - reference images/videos/audio → "minimax-h3/reference-to-video":
+     *   prompt + reference_image_urls (+ reference_video_urls / reference_audio_urls)
+     *   + aspect_ratio + duration + resolution
+     * - otherwise → apiId (t2v): prompt + aspect_ratio + duration + resolution
+     */
+    useMinimaxH3?: boolean;
   };
 }
 
@@ -889,6 +939,39 @@ export const VIDEO_MODELS: VideoModel[] = [
       seedKey: "seed",
       useHappyHorse: true,
       promptMaxLength: 5000,
+    },
+  },
+  // ── MiniMax ──────────────────────────────────────────────────────────────────
+  {
+    id: "minimax-h3",
+    apiId: "minimax-h3/text-to-video",
+    imageApiId: "minimax-h3/image-to-video",
+    name: "H3",
+    provider: "MiniMax",
+    ratios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 6,
+    defaultRatio: "9:16",
+    handles: ["prompt", "startFrame", "endFrame", "resource", "referenceVideo", "audioRef"],
+    sound: false,
+    maxResources: 9,
+    maxReferenceVideos: 3,
+    maxReferenceAudios: 3,
+    resolutions: ["768P", "2K"],
+    defaultResolution: "2K",
+    apiInput: {
+      aspectRatioKey: "aspect_ratio",
+      durationKey: "duration",
+      durationMin: 4,
+      durationMax: 15,
+      resolutionKey: "resolution",
+      firstFrameKey: "first_frame_url",
+      lastFrameKey: "last_frame_url",
+      referenceImagesKey: "reference_image_urls",
+      referenceVideosKey: "reference_video_urls",
+      referenceAudiosKey: "reference_audio_urls",
+      promptMaxLength: 7000,
+      useMinimaxH3: true,
     },
   },
   // ── Kling motion control ─────────────────────────────────────────────────────
