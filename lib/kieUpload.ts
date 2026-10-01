@@ -8,7 +8,7 @@
  * is used instead.
  */
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { resolve, sep } from "node:path";
 import { MEDIA_DIR } from "./guest/paths";
 import { getMediaAsset } from "./guest/db";
 import { assertSafeUrl } from "./ssrf";
@@ -37,6 +37,10 @@ const MIME_BY_EXT: Record<string, string> = {
   gif: "image/gif",
   mp4: "video/mp4",
   webm: "video/webm",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
 };
 
 /** A local reference that kie.ai can't fetch and we must re-host. */
@@ -54,7 +58,12 @@ async function toDataUrl(input: string, userId?: string): Promise<string> {
     return `data:${asset.mime_type};base64,${buffer.toString("base64")}`;
   }
   const rel = input.replace(/^\/generated\//, "").replace(/^\/+/, "");
-  const buf = await readFile(join(MEDIA_DIR, rel));
+  const root = resolve(MEDIA_DIR);
+  const path = resolve(root, rel);
+  if (!path.startsWith(`${root}${sep}`) || rel.includes("\0")) {
+    throw new Error("Media path is outside the data directory");
+  }
+  const buf = await readFile(path);
   const ext = rel.split(".").pop()?.toLowerCase() ?? "";
   const mime = MIME_BY_EXT[ext] ?? "application/octet-stream";
   return `data:${mime};base64,${buf.toString("base64")}`;
@@ -92,6 +101,9 @@ function uploadOne(input: string, apiKey: string, userId?: string): Promise<stri
  * short-lived kie.ai temporary URL.
  */
 async function makeReachable(input: string, apiKey: string, userId?: string): Promise<string> {
+  if (MANAGED_MODE && input.startsWith("/generated/")) {
+    throw new Error("Legacy generated media is not available in managed mode");
+  }
   if (MANAGED_MODE && input.startsWith("/api/media/")) {
     const id = input.slice("/api/media/".length).split(/[?#/]/, 1)[0];
     const asset = id && userId ? getMediaAsset(id, userId) : null;

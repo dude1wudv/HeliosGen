@@ -1,4 +1,5 @@
 import { join } from "path";
+import { MANAGED_MODE } from "@/lib/managedMode";
 
 /**
  * Writable locations for guest-mode persistence.
@@ -15,4 +16,5 @@ import { join } from "path";
 export const DATA_DIR = process.env.HELIOS_DATA_DIR || join(process.cwd(), "data");
 
 export const MEDIA_DIR =
-  process.env.HELIOS_MEDIA_DIR || join(process.cwd(), "public", "generated");
+  process.env.HELIOS_MEDIA_DIR ||
+  (MANAGED_MODE ? join(DATA_DIR, "media") : join(process.cwd(), "public", "generated"));

@@ -13,6 +13,7 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: "3000"
       HELIOS_DATA_DIR: /data
+      HELIOS_MEDIA_DIR: /data/media
       SUB2API_MANAGED_MODE: "true"
       NEXT_PUBLIC_SUB2API_MANAGED_MODE: "true"
       HELIOS_PUBLIC_ORIGIN: https://canvas.sub.sunmmyapi.xyz

@@ -11,6 +11,7 @@ import { createReadStream, existsSync, statSync } from "fs";
 import { join, normalize, extname } from "path";
 import { Readable } from "stream";
 import { MEDIA_DIR } from "@/lib/guest/paths";
+import { MANAGED_MODE } from "@/lib/managedMode";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  if (MANAGED_MODE) {
+    return new NextResponse("Not found", { status: 404 });
+  }
   const { path: segments } = await params;
 
   // Reject traversal — the joined path must stay inside MEDIA_DIR.
