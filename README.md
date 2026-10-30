@@ -13,6 +13,10 @@
 
 ---
 
+## Fork maintenance and managed mode
+
+This fork's `main` contains both the desktop app and a managed mode backed by Sub2API. The package version is **1.2.2**. Managed-mode protocol changes must be checked against both HeliosGen and Sub2API, including authentication and user isolation. Desktop instructions below describe the desktop workflow; a source release does not imply a deployed managed service or an available desktop binary. See the [releases](https://github.com/dude1wudv/HeliosGen/releases) for actual assets.
+
 # ⬇️ Download
 
 **HeliosGen is a desktop app.** The Releases page contains source releases and
