@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/appPaths";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
   const version = modelMap[model] || modelMap["flux-schnell"];
 
   // Create prediction
-  const createRes = await fetch("https://api.replicate.com/v1/predictions", {
+  const createRes = await appFetch("https://api.replicate.com/v1/predictions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
   const id = prediction.id;
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000));
-    const poll = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+    const poll = await appFetch(`https://api.replicate.com/v1/predictions/${id}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     const data = await poll.json();

@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/appPaths";
 import { NextRequest, NextResponse } from "next/server";
 import { jobStore } from "@/lib/jobStore";
 import { pollKieJob } from "@/lib/kieJobPoller";
@@ -376,7 +377,7 @@ export async function POST(req: NextRequest) {
   }
 
   console.log(`[generate-video] sending to ${endpoint}:`, JSON.stringify(kieBody));
-  const createRes = await fetch(endpoint, {
+  const createRes = await appFetch(endpoint, {
     method:  "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body:    JSON.stringify(kieBody),

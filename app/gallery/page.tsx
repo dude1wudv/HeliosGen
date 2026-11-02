@@ -1,4 +1,8 @@
 "use client";
+import { appPath, logicalAppPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -409,10 +413,10 @@ function snapWidth(w: number): number {
 function thumbSrc(url: string, snapped: number): string {
   if (!url || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("/_next/")) return url;
   // R2 URLs: use our own proxy to avoid Cloudflare ECONNRESET on Next.js's undici fetcher
-  if (url.includes(".r2.dev/")) {
-    return `/api/thumb?url=${encodeURIComponent(url)}&w=${snapped}`;
+  if (url.includes(".r2.dev/") || logicalAppPath(url).startsWith("/api/media/")) {
+    return appPath(`/api/thumb?url=${encodeURIComponent(url)}&w=${snapped}`);
   }
-  return `/_next/image?url=${encodeURIComponent(url)}&w=${snapped}&q=75`;
+  return appPath(`/_next/image?url=${encodeURIComponent(appPath(url))}&w=${snapped}&q=75`);
 }
 
 interface RefImage {
@@ -808,7 +812,7 @@ function EmptyFan({ blur }: { blur?: boolean }) {
         <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginRight: c.mr, zIndex: c.z }}>
           <div style={{ transform: `rotate(${c.rot})${c.rounded ? " scaleY(-1)" : ""}` }}>
             <div style={{ position: "relative", overflow: "hidden", width: "clamp(64px,min(12vw,16vh),172px)", height: "clamp(64px,min(12vw,16vh),172px)", borderRadius: c.rounded ? "50%" : "12px", border: c.border ? "3px solid rgba(45,212,191,0.75)" : undefined, boxShadow: c.border ? "0 0 14px rgba(45,212,191,0.35), 0 0 4px rgba(45,212,191,0.2)" : undefined }}>
-              <img src={EMPTY_IMGS[i]} alt="" style={{ objectFit: "cover", width: "100%", height: "100%", display: "block" }} />
+              <img src={appPath(EMPTY_IMGS[i])} alt="" style={{ objectFit: "cover", width: "100%", height: "100%", display: "block" }} />
             </div>
           </div>
         </div>
@@ -1307,7 +1311,7 @@ function GalleryInner() {
     toResume.forEach(async (pending) => {
       try {
         // Check immediately (no 3s delay) before entering the regular poll loop
-        const immediateRes = await fetch(`/api/job-status?taskId=${pending.taskId!}`);
+        const immediateRes = await appFetch(`/api/job-status?taskId=${pending.taskId!}`);
         const immediateResult = await immediateRes.json() as { status: string; error?: string };
         if (immediateResult.status === "error") throw new Error(immediateResult.error ?? "Generation failed");
         if (immediateResult.status === "not_found") {
@@ -1368,7 +1372,7 @@ function GalleryInner() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.access_token) {
-        fetch("/api/settings/kie-key", { headers: { Authorization: `Bearer ${session.access_token}` } })
+        appFetch("/api/settings/kie-key", { headers: { Authorization: `Bearer ${session.access_token}` } })
           .then(r => r.json())
           .then(d => setKieKeySet(!!d.hasToken))
           .catch(() => setKieKeySet(false))
@@ -1411,7 +1415,7 @@ function GalleryInner() {
     if (!token) { setLoading(false); setLoadingMore(false); return; }
     try {
       const genType = currentTab === "videos" ? "video" : "image";
-      const res = await fetch(`/api/gallery?type=${genType}&page=${page}&source=${apiSource}`, {
+      const res = await appFetch(`/api/gallery?type=${genType}&page=${page}&source=${apiSource}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
@@ -1456,7 +1460,7 @@ function GalleryInner() {
     if (!token) return [];
     try {
       const genType = currentTab === "videos" ? "video" : "image";
-      const res = await fetch(`/api/gallery?type=${genType}&page=0&source=generation`, {
+      const res = await appFetch(`/api/gallery?type=${genType}&page=0&source=generation`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return [];
@@ -1799,7 +1803,7 @@ function GalleryInner() {
     await Promise.all(toAdd.map(async (file, i) => {
       const entry = newEntries[i];
       try {
-        const res = await fetch("/api/upload-asset", {
+        const res = await appFetch("/api/upload-asset", {
           method: "POST",
           headers: {
             "Content-Type": file.type,
@@ -1900,7 +1904,7 @@ function GalleryInner() {
     await Promise.all(toAdd.map(async (file, i) => {
       const entry = newEntries[i];
       try {
-        const res = await fetch("/api/upload-asset", {
+        const res = await appFetch("/api/upload-asset", {
           method: "POST",
           headers: { "Content-Type": file.type, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: file,
@@ -2055,7 +2059,7 @@ function GalleryInner() {
       const isAzure = !!(azureBaseUrl && azureDeployment && providerForModel === "azure");
       const isCodex = providerForModel === "codex";
 
-      const res = await fetch("/api/generate", {
+      const res = await appFetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -2142,7 +2146,7 @@ function GalleryInner() {
         ? (veoMode === "references" ? "REFERENCE_2_VIDEO" : (veoImageUrls.length > 0 ? "FIRST_AND_LAST_FRAMES_2_VIDEO" : "TEXT_2_VIDEO"))
         : undefined;
 
-      const res = await fetch("/api/generate-video", {
+      const res = await appFetch("/api/generate-video", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(isVeo ? {
@@ -2194,7 +2198,7 @@ function GalleryInner() {
 
     for (let i = 0; i < 150; i++) {
       await waitOrVisible(3_000);
-      const poll = await fetch(`/api/job-status?taskId=${taskId}`);
+      const poll = await appFetch(`/api/job-status?taskId=${taskId}`);
       const result = await poll.json() as { status: string; error?: string };
       if (result.status === "done") return;
       if (result.status === "error") throw new Error(result.error ?? "Generation failed");
@@ -2806,7 +2810,7 @@ function GalleryInner() {
     const token = await getToken();
     if (!token) return;
     const item = items.find(i => i.id === id);
-    await fetch("/api/gallery", {
+    await appFetch("/api/gallery", {
       method: "DELETE",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ id, source }),
@@ -2827,7 +2831,7 @@ function GalleryInner() {
     const taskId = randomUUID();
     setDownloads(prev => [...prev, { id: taskId, filename, status: "preparing" }]);
     try {
-      const res = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=${filename}`);
+      const res = await appFetch(`/api/download?url=${encodeURIComponent(url)}&filename=${filename}`);
       if (!res.ok) throw new Error("Failed");
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -2866,7 +2870,7 @@ function GalleryInner() {
     const token = await getToken();
     if (!token) return;
     await Promise.all(toDelete.map(item =>
-      fetch("/api/gallery", {
+      appFetch("/api/gallery", {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id: item.id, source: item.source }),
@@ -3045,7 +3049,7 @@ function GalleryInner() {
           bump();
         };
         vid.onerror = () => { naturalRatioCache.set(item.url, "16 / 9"); bump(); };
-        vid.src = item.url;
+        vid.src = appPath(item.url);
       } else {
         const probeUrl = item.imageUrls?.[0] ?? item.url;
         const img = new window.Image();
@@ -3055,7 +3059,7 @@ function GalleryInner() {
           bump();
         };
         img.onerror = () => { naturalRatioCache.set(item.url, "4 / 3"); bump(); };
-        img.src = probeUrl;
+        img.src = appPath(probeUrl);
       }
     });
 
@@ -3308,7 +3312,7 @@ function GalleryInner() {
                                   if (retryIsVideo) {
                                     const vm = VIDEO_MODELS.find(m => m.id === modelId);
                                     const isVeo = !!(vm?.apiInput.useGoogleVeo);
-                                    const res = await fetch("/api/generate-video", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(isVeo ? {
+                                    const res = await appFetch("/api/generate-video", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(isVeo ? {
                                       model: modelId, prompt: pg.prompt, aspect_ratio: pg.aspectRatio, generationType: "TEXT_2_VIDEO",
                                       imageUrls: storedRefs, enableTranslation: true, enableFallback: false, watermark: "",
                                     } : {
@@ -3328,7 +3332,7 @@ function GalleryInner() {
                                     const providerForModel = (() => { try { return JSON.parse(localStorage.getItem("aiui-model-providers") ?? "{}")[modelId] ?? "kie"; } catch { return "kie"; } })();
                                     const isAzure = !!(azureBaseUrl && azureDeployment && providerForModel === "azure");
                                     const isCodex = providerForModel === "codex";
-                                    const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ prompt: resolvedPrompt, model: modelId, aspectRatio: pg.aspectRatio, quality, imageUrls, ...(isAzure ? { azureBaseUrl, azureDeployment, azureQuality: quality } : {}), ...(isCodex ? { codexProvider: true } : {}) }) });
+                                    const res = await appFetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ prompt: resolvedPrompt, model: modelId, aspectRatio: pg.aspectRatio, quality, imageUrls, ...(isAzure ? { azureBaseUrl, azureDeployment, azureQuality: quality } : {}), ...(isCodex ? { codexProvider: true } : {}) }) });
                                     const d = await res.json() as { taskId?: string; error?: string };
                                     if (!res.ok) throw new Error(d.error ?? "Failed");
                                     taskId = d.taskId!;
@@ -3836,7 +3840,7 @@ function GalleryInner() {
                   return (
                     <div key={img.id} onMouseDown={e => e.preventDefault()} onPointerDown={e => { if (refImages.length <= 1 || img.uploading || img.error) return; _reorderDragItem = { id: img.id, listTarget: "refImage" }; _reorderOverId = null; setDraggingId(img.id); }} onPointerEnter={() => { if (!_reorderDragItem || _reorderDragItem.id === img.id || _reorderDragItem.listTarget !== "refImage") return; _reorderOverId = img.id; setReorderOverId(img.id); }} onPointerUp={e => { const info = _reorderDragItem; if (!info || info.listTarget !== "refImage") return; e.stopPropagation(); if (_reorderOverId) e.preventDefault(); const target = _reorderOverId ?? img.id; handleReorderDrop(target, "refImage"); }} onMouseEnter={() => { if (!draggingId) setHoveredRefId(img.id); }} onMouseLeave={() => setHoveredRefId(null)} onClick={() => { if (_reorderJustDropped) { _reorderJustDropped = false; return; } if (!img.uploading && !img.error && !draggingId) setRefPreview({ url: img.objectUrl, mediaKind: "image" }); }} onDragOver={e => { if (!e.dataTransfer.types.includes("application/x-gallery-item")) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; setDragOverSlotKey(`refimg-filled-${img.id}`); }} onDragLeave={() => setDragOverSlotKey(null)} onDrop={e => handleGalleryItemDrop(e, "refImage", "image")} style={{ position: "relative", width: "64px", height: "64px", borderRadius: "8px", overflow: "hidden", background: "#1A1C1F", flexShrink: 0, touchAction: refImages.length > 1 ? "none" : undefined, transition: "border 120ms, box-shadow 120ms, opacity 120ms", border: img.error ? "1px solid rgba(248,113,113,0.4)" : dragOverSlotKey === `refimg-filled-${img.id}` ? "2.5px solid #2DD4BF" : taggedImages.some(t => t.refId === img.id) ? "2.5px solid #10b981" : "1px solid rgba(255,255,255,0.08)", boxShadow: dragOverSlotKey === `refimg-filled-${img.id}` ? "0 0 0 3px rgba(45,212,191,0.25)" : undefined, cursor: (!img.uploading && !img.error) ? (refImages.length > 1 ? (draggingId === img.id ? "grabbing" : "grab") : "zoom-in") : "default", animation: isRemoving ? "none" : (isDragging ? "none" : "refImgIn 260ms cubic-bezier(0.16,1,0.3,1) backwards"), opacity: isDragging ? 0.3 : undefined, ...(isRemoving ? { transition: "opacity 170ms, transform 170ms", opacity: 0, transform: "translateY(-10px) scale(0.92)" } : {}) }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={thumbSrc(img.objectUrl, snapWidth(64))} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      <img src={appPath(thumbSrc(img.objectUrl, snapWidth(64)))} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       {isHovered && !img.uploading && !img.error && (
                         <div onClick={e => { if (_reorderJustDropped || draggingId) { _reorderJustDropped = false; e.stopPropagation(); return; } e.stopPropagation(); setRefPreview({ url: img.objectUrl, mediaKind: "image" }); }} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-in" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></div>
                       )}
@@ -3928,7 +3932,7 @@ function GalleryInner() {
                       return (
                         <div key={el.id} onMouseEnter={() => setHoveredRefId(hovId)} onMouseLeave={() => setHoveredRefId(null)} style={{ position: "relative", width: "64px", height: "64px", borderRadius: "8px", overflow: "hidden", flexShrink: 0, background: "#1a1c1f", border: "1px solid rgba(255,255,255,0.12)" }}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                          <img src={appPath(thumb)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                           {hoveredRefId === hovId && (
                             <div onClick={() => setRefPreview({ url: thumb, mediaKind: "image" })} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-in", zIndex: 1 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></div>
                           )}
@@ -3952,7 +3956,7 @@ function GalleryInner() {
                         const isSlotDragging = draggingId === r.id;
                         return (
                         <div key={r.id} onMouseDown={e => e.preventDefault()} onPointerDown={e => { if (!isMultiTarget || listForSlot.length <= 1 || r.uploading || r.error) return; _reorderDragItem = { id: r.id, listTarget: slot.target as "resource"|"referenceVideo"|"audioRef" }; _reorderOverId = null; setDraggingId(r.id); }} onPointerEnter={() => { if (!_reorderDragItem || _reorderDragItem.id === r.id || _reorderDragItem.listTarget !== slot.target) return; _reorderOverId = r.id; setReorderOverId(r.id); }} onPointerUp={e => { const info = _reorderDragItem; if (!info || info.listTarget !== slot.target) return; e.stopPropagation(); if (_reorderOverId) e.preventDefault(); const target = _reorderOverId ?? r.id; handleReorderDrop(target, slot.target as "resource"|"referenceVideo"|"audioRef"); }} onMouseEnter={() => { if (!draggingId) setHoveredRefId(hovId); }} onMouseLeave={() => setHoveredRefId(null)} onDragOver={e => { if (slot.mediaKind === "audio" || !e.dataTransfer.types.includes("application/x-gallery-item")) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; setDragOverSlotKey(dragKey); }} onDragLeave={() => setDragOverSlotKey(null)} onDrop={e => { if (slot.mediaKind !== "audio") handleGalleryItemDrop(e, slot.target as any, slot.mediaKind as "image" | "video"); }} style={{ position: "relative", width: "64px", height: "64px", borderRadius: "8px", overflow: "hidden", flexShrink: 0, background: "#1a1c1f", touchAction: (isMultiTarget && listForSlot.length > 1) ? "none" : undefined, transition: "border 120ms, box-shadow 120ms, opacity 120ms", border: r.error ? "1px solid rgba(248,113,113,0.4)" : dragOverSlotKey === dragKey ? "2.5px solid #2DD4BF" : taggedImages.some(t => t.refId === r.id) ? "2.5px solid #10b981" : "1px solid rgba(255,255,255,0.12)", boxShadow: dragOverSlotKey === dragKey ? "0 0 0 3px rgba(45,212,191,0.25)" : undefined, opacity: isSlotDragging ? 0.3 : undefined, cursor: (isMultiTarget && listForSlot.length > 1 && !r.uploading && !r.error) ? (draggingId === r.id ? "grabbing" : "grab") : undefined }}>
-                          {slot.mediaKind === "image" ? <img src={thumbSrc(r.objectUrl, snapWidth(64))} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : slot.mediaKind === "video" ? <video src={r.objectUrl} autoPlay muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>}
+                          {slot.mediaKind === "image" ? <img src={appPath(thumbSrc(r.objectUrl, snapWidth(64)))} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : slot.mediaKind === "video" ? <video src={appPath(r.objectUrl)} autoPlay muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>}
                           {hoveredRefId === hovId && !r.uploading && !r.error && slot.mediaKind !== "audio" && (
                             <div onClick={() => { if (_reorderJustDropped || draggingId) { _reorderJustDropped = false; return; } setRefPreview({ url: r.objectUrl, mediaKind: slot.mediaKind }); }} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-in", zIndex: 1 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></div>
                           )}
@@ -4894,7 +4898,7 @@ function GalleryInner() {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={thumbSrc(ref.objectUrl, snapWidth(128))}
+                  src={appPath(thumbSrc(ref.objectUrl, snapWidth(128)))}
                   alt=""
                   style={{ width: "30px", height: "30px", borderRadius: "6px", objectFit: "cover", flexShrink: 0, background: "#1a1c1f" }}
                 />
@@ -4946,7 +4950,7 @@ function GalleryInner() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={thumbSrc(chipPreview.tag.url, snapWidth(256))}
+              src={appPath(thumbSrc(chipPreview.tag.url, snapWidth(256)))}
               alt=""
               style={{ display: "block", maxWidth: "200px", maxHeight: "160px", width: "auto", height: "auto", objectFit: "contain" }}
             />
@@ -5001,7 +5005,7 @@ function GalleryInner() {
           >
             {refPreview.mediaKind === "video" ? (
               <video
-                src={refPreview.url}
+                src={appPath(refPreview.url)}
                 controls
                 autoPlay
                 style={{ display: "block", maxWidth: "90vw", maxHeight: "90vh" }}
@@ -5009,7 +5013,7 @@ function GalleryInner() {
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={refPreview.url}
+                src={appPath(refPreview.url)}
                 alt=""
                 style={{ display: "block", maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain" }}
               />
@@ -5215,7 +5219,7 @@ function ElementPickerModal({
     await Promise.all(toAdd.map(async (file, i) => {
       const entry = newEntries[i];
       try {
-        const res = await fetch("/api/upload-asset", {
+        const res = await appFetch("/api/upload-asset", {
           method: "POST",
           headers: { "Content-Type": file.type, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: file,
@@ -5324,7 +5328,7 @@ function ElementPickerModal({
                       onMouseEnter={e => { if (!isAttached && !atMax) e.currentTarget.style.borderColor = "rgba(255,255,255,0.5)"; }}
                       onMouseLeave={e => { if (!isAttached) e.currentTarget.style.borderColor = "transparent"; }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={el.imageUrls[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      <img src={appPath(el.imageUrls[0])} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       {el.imageUrls.length > 1 && (
                         <div style={{ position: "absolute", top: "5px", left: "5px", background: "rgba(0,0,0,0.65)", borderRadius: "4px", padding: "1px 5px", fontSize: "9px", fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
                           {el.imageUrls.length}
@@ -5372,7 +5376,7 @@ function ElementPickerModal({
                 {createImages.map((img, i) => (
                   <div key={img.id} style={{ position: "relative", width: "72px", height: "72px", borderRadius: "8px", overflow: "hidden", border: img.error ? "1px solid rgba(248,113,113,0.4)" : "1px solid rgba(255,255,255,0.12)", background: "#1a1c1f", flexShrink: 0 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.objectUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    <img src={appPath(img.objectUrl)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     {img.uploading && (
                       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <span style={{ width: "14px", height: "14px", borderRadius: "50%", border: "2px solid rgba(255,255,255,0.15)", borderTopColor: "rgba(255,255,255,0.8)", display: "inline-block", animation: "spin 0.75s linear infinite" }} />
@@ -6302,7 +6306,7 @@ function GalleryCard({
         <>
           <video
             ref={videoRef}
-            src={shouldLoad ? item.url : undefined}
+            src={appPath(shouldLoad ? item.url : undefined)}
             muted={videoMuted || !isHovered}
             autoPlay
             loop
@@ -6332,7 +6336,7 @@ function GalleryCard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             key={displayUrl}
-            src={shouldLoad ? (isThumbFailed ? displayUrl : thumbSrc(displayUrl, stableSnap)) : undefined}
+            src={appPath(shouldLoad ? (isThumbFailed ? displayUrl : thumbSrc(displayUrl, stableSnap)) : undefined)}
             alt={item.prompt ?? ""}
             draggable={false}
             decoding="async"
@@ -6772,7 +6776,7 @@ function renderLightboxPrompt(
       }}>
         {imgUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbSrc(imgUrl, snapWidth(20))} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
+          <img src={appPath(thumbSrc(imgUrl, snapWidth(20)))} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
         )}
         Image {n}
       </span>
@@ -6842,7 +6846,7 @@ function Lightbox({ item, thumbUrl, onClose, onCopyPrompt, onPrev, onNext }: { i
       const urlExt = lightboxUrl.split("?")[0].split(".").pop()?.toLowerCase();
       const ext = isVideo ? "mp4" : (urlExt && ["png","jpg","jpeg","webp","gif"].includes(urlExt) ? urlExt : "png");
       const filename = `${isVideo ? "video" : "image"}-${item.id.slice(0, 8)}.${ext}`;
-      const res = await fetch(`/api/download?url=${encodeURIComponent(lightboxUrl)}&filename=${filename}`);
+      const res = await appFetch(`/api/download?url=${encodeURIComponent(lightboxUrl)}&filename=${filename}`);
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
       const a = document.createElement("a");
@@ -6949,7 +6953,7 @@ function Lightbox({ item, thumbUrl, onClose, onCopyPrompt, onPrev, onNext }: { i
           {isVideo ? (
             <video
               key={lightboxUrl}
-              src={lightboxUrl}
+              src={appPath(lightboxUrl)}
               autoPlay
               loop
               playsInline
@@ -6971,7 +6975,7 @@ function Lightbox({ item, thumbUrl, onClose, onCopyPrompt, onPrev, onNext }: { i
             <>
               {/* Thumbnail placeholder — already in browser cache, shows instantly */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img key={`thumb-${lightboxUrl}`} src={placeholderSrc} alt="" aria-hidden style={{
+              <img key={`thumb-${lightboxUrl}`} src={appPath(placeholderSrc)} alt="" aria-hidden style={{
                 display: "block",
                 maxHeight: zoomed ? "100vh" : "calc(100vh - 48px)",
                 maxWidth: zoomed ? "100vw" : "100%",
@@ -6981,7 +6985,7 @@ function Lightbox({ item, thumbUrl, onClose, onCopyPrompt, onPrev, onNext }: { i
               }} />
               {/* Full-res — opacity:1 immediately so browser paints rows progressively */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img key={`full-${lightboxUrl}`} src={lightboxUrl} alt={item.prompt ?? ""} onLoad={e => { setFullLoaded(true); const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight) setResolution(`${img.naturalWidth} × ${img.naturalHeight}`); }} style={{
+              <img key={`full-${lightboxUrl}`} src={appPath(lightboxUrl)} alt={item.prompt ?? ""} onLoad={e => { setFullLoaded(true); const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight) setResolution(`${img.naturalWidth} × ${img.naturalHeight}`); }} style={{
                 position: "absolute", inset: 0, display: "block", width: "100%", height: "100%", objectFit: "contain",
               }} />
               {/* Dot indicators */}
@@ -7048,7 +7052,7 @@ function Lightbox({ item, thumbUrl, onClose, onCopyPrompt, onPrev, onNext }: { i
                 {item.referenceImageUrls.map((url, i) => (
                   <div key={i} style={{ position: "relative", width: 76, height: 68, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={thumbSrc(url, snapWidth(76))} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    <img src={appPath(thumbSrc(url, snapWidth(76)))} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     <div style={{
                       position: "absolute", bottom: 4, right: 4,
                       background: "rgba(0,0,0,0.65)", borderRadius: 4,
@@ -7204,7 +7208,7 @@ function LoopingVideo({ src }: { src: string }) {
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: playing ? 0 : 1, transition: "opacity 0.4s ease" }} />
-      <video ref={videoRef} src={src} autoPlay loop muted playsInline preload="auto" style={{ objectFit: "cover", width: "100%", height: "100%", display: "block", pointerEvents: "none" }} />
+      <video ref={videoRef} src={appPath(src)} autoPlay loop muted playsInline preload="auto" style={{ objectFit: "cover", width: "100%", height: "100%", display: "block", pointerEvents: "none" }} />
     </div>
   );
 }
@@ -7216,7 +7220,7 @@ function VideoFan({ blur }: { blur?: boolean }) {
         <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginRight: c.mr, zIndex: c.z }}>
           <div style={{ transform: `rotate(${c.rot})${c.rounded ? " scaleY(-1)" : ""}` }}>
             <div style={{ position: "relative", overflow: "hidden", width: "clamp(64px,min(12vw,16vh),172px)", height: "clamp(64px,min(12vw,16vh),172px)", borderRadius: c.rounded ? "50%" : "12px", border: "3px solid rgba(45,212,191,0.75)", boxShadow: "0 0 14px rgba(45,212,191,0.35), 0 0 4px rgba(45,212,191,0.2)" }}>
-              <LoopingVideo src={EMPTY_VIDEOS[i]} />
+              <LoopingVideo src={appPath(EMPTY_VIDEOS[i])} />
             </div>
           </div>
         </div>

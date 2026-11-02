@@ -1,4 +1,6 @@
 "use client";
+import { appFetch } from "@/lib/appPaths";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkflowStore, Space } from "./store";
 import { createClient } from "./supabase/client";
@@ -58,7 +60,7 @@ export function useSpaceSync() {
     (async () => {
       if (LOCAL_DB) {
         try {
-          const res = await fetch("/api/guest-spaces");
+          const res = await appFetch("/api/guest-spaces");
           if (!res.ok) return;
           const { spaces: dbSpaces } = (await res.json()) as { spaces: Space[] };
           if (!dbSpaces?.length) return;
@@ -116,7 +118,7 @@ export function useSpaceSync() {
       setStatus("syncing");
       try {
         const spacesToSave = useWorkflowStore.getState().spaces.filter((sp) => sp.nodes.length > 0);
-        const res = await fetch("/api/guest-spaces", {
+        const res = await appFetch("/api/guest-spaces", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           keepalive,

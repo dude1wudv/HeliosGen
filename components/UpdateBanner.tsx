@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import { useEffect, useState } from "react";
 
 /**
@@ -30,7 +34,7 @@ export default function UpdateBanner() {
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/update-check")
+    appFetch("/api/update-check")
       .then((r) => (r.ok ? r.json() : null))
       .then((d: UpdateInfo | null) => {
         if (!alive || !d?.updateAvailable) return;
@@ -283,7 +287,7 @@ function ChangelogModal({ info, onClose }: { info: UpdateInfo; onClose: () => vo
               hands the URL to the OS browser via /api/open-external. A _blank
               would also trigger Tauri's own (unpermitted) shell.open. */}
           <a
-            href={info.url}
+            href={appPath(info.url)}
             onClick={onClose}
             style={{
               fontSize: "12px",

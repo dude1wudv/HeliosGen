@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/appPaths";
 /**
  * Desktop update check. Asks the GitHub Releases API whether a newer tag than
  * the running build exists and hands the frontend (`components/UpdateBanner.tsx`)
@@ -63,7 +64,7 @@ async function check(): Promise<UpdatePayload> {
     prerelease?: boolean;
   };
   try {
-    const res = await fetch(RELEASES_API, {
+    const res = await appFetch(RELEASES_API, {
       headers: {
         Accept: "application/vnd.github+json",
         "User-Agent": `HeliosGen-Desktop/${CURRENT_VERSION}`,

@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
@@ -532,7 +536,7 @@ export default function WorkflowCanvas() {
             updateNodeDataRef.current(nodeId, {
               imageNaturalRatio: `${img.naturalWidth} / ${img.naturalHeight}`,
             });
-          img.src = blobUrl;
+          img.src = appPath(blobUrl);
 
           // Hash + lookup + upload in background
           (async () => {
@@ -541,12 +545,12 @@ export default function WorkflowCanvas() {
               const hash = await sha256Hex(bytes);
 
               try {
-                const lk = await fetch(`/api/lookup-asset?hash=${hash}`);
+                const lk = await appFetch(`/api/lookup-asset?hash=${hash}`);
                 const { cdnUrl } = await lk.json() as { cdnUrl: string | null };
                 if (cdnUrl) { updateNodeDataRef.current(nodeId, { inputImage: cdnUrl, r2Url: cdnUrl }); return; }
               } catch { /* fall through */ }
 
-              const res = await fetch("/api/upload-asset", {
+              const res = await appFetch("/api/upload-asset", {
                 method: "POST",
                 headers: { "Content-Type": file.type || "image/jpeg" },
                 body: bytes,
@@ -571,12 +575,12 @@ export default function WorkflowCanvas() {
               const hash = await sha256Hex(bytes);
 
               try {
-                const lk = await fetch(`/api/lookup-asset?hash=${hash}`);
+                const lk = await appFetch(`/api/lookup-asset?hash=${hash}`);
                 const { cdnUrl } = await lk.json() as { cdnUrl: string | null };
                 if (cdnUrl) { updateNodeDataRef.current(nodeId, { videoUrl: cdnUrl }); return; }
               } catch { /* fall through */ }
 
-              const res = await fetch("/api/upload-asset", {
+              const res = await appFetch("/api/upload-asset", {
                 method: "POST",
                 headers: { "Content-Type": file.type || "video/mp4" },
                 body: bytes,
@@ -864,7 +868,7 @@ export default function WorkflowCanvas() {
           updateNodeDataRef.current(srcId, { extractingFrame: true });
           getAccessToken().then((token) => {
             if (!token) { updateNodeDataRef.current(srcId, { extractingFrame: false }); return; }
-            fetch("/api/extract-frame", {
+            appFetch("/api/extract-frame", {
               method: "POST",
               headers: authHeaders(token),
               body: JSON.stringify(extractBody),
@@ -1185,7 +1189,7 @@ export default function WorkflowCanvas() {
             ? { videoUrl, timeSeconds: trimEnd }
             : { videoUrl, timeSeconds: trimStart ?? 0 };
           try {
-            const r = await fetch("/api/extract-frame", {
+            const r = await appFetch("/api/extract-frame", {
               method: "POST",
               headers: authHeaders(token),
               body: JSON.stringify(extractBody),
@@ -1222,7 +1226,7 @@ export default function WorkflowCanvas() {
 
         try {
           // Submit job
-          const res = await fetch("/api/generate", {
+          const res = await appFetch("/api/generate", {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(payload),
@@ -1251,7 +1255,7 @@ export default function WorkflowCanvas() {
           let imageUrl: string | undefined;
           for (let attempt = 0; attempt < 120; attempt++) {
             await new Promise((r) => setTimeout(r, 3000));
-            const poll = await fetch(`/api/job-status?taskId=${taskId}`);
+            const poll = await appFetch(`/api/job-status?taskId=${taskId}`);
             const result = await poll.json();
             if (result.status === "done") { imageUrl = result.imageUrl; break; }
             if (result.status === "error") throw new Error(result.error ?? "Generation failed");
@@ -1288,7 +1292,7 @@ export default function WorkflowCanvas() {
         updateNodeData(nodeId, { status: "running", outputText: "", errorMsg: undefined });
 
         try {
-          const res = await fetch("/api/assistant", {
+          const res = await appFetch("/api/assistant", {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify({
@@ -1366,7 +1370,7 @@ export default function WorkflowCanvas() {
         updateNodeData(nodeId, { status: "running", videoUrl: undefined });
 
         try {
-          const res = await fetch("/api/generate-video", {
+          const res = await appFetch("/api/generate-video", {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(payload),

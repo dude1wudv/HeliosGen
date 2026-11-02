@@ -1,4 +1,6 @@
 "use client";
+import { appFetch } from "@/lib/appPaths";
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NodeProps, Node, useReactFlow, NodeResizeControl, NodeToolbar, Position } from "@xyflow/react";
 import { useWorkflowStore, NodeData } from "@/lib/store";
@@ -268,7 +270,7 @@ export default function GroupNode({ id, data, selected }: NodeProps<GroupNodeTyp
     try {
       const entries = await Promise.all(
         assets.map(async ({ url, name }) => {
-          const resp = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=${name}`);
+          const resp = await appFetch(`/api/download?url=${encodeURIComponent(url)}&filename=${name}`);
           const buf = await resp.arrayBuffer();
           return { name, data: new Uint8Array(buf) };
         })

@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import { useRef, useCallback, useState, useEffect } from "react";
 import NextImage from "next/image";
 import { Handle, Position, NodeProps, Node, useReactFlow, useUpdateNodeInternals } from "@xyflow/react";
@@ -223,9 +227,9 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
         tmp.crossOrigin = "anonymous";
         tmp.muted       = true;
         tmp.preload     = "metadata";
-        tmp.src         = proxyUrl;
+        tmp.src         = appPath(proxyUrl);
 
-        const cleanup = () => { tmp.src = ""; tmp.remove(); };
+        const cleanup = () => { tmp.src = appPath(""); tmp.remove(); };
 
         tmp.addEventListener("error", () => { cleanup(); reject(new Error("Could not load video for capture")); }, { once: true });
         tmp.addEventListener("loadedmetadata", () => { tmp.currentTime = seekTime; }, { once: true });
@@ -258,7 +262,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
       const bytes = await blob.arrayBuffer();
       const authHeaders: Record<string, string> = {};
 
-      const res  = await fetch("/api/upload-asset", {
+      const res  = await appFetch("/api/upload-asset", {
         method: "POST",
         headers: { "Content-Type": "image/jpeg", ...authHeaders },
         body: bytes,
@@ -340,7 +344,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
       const body = isLastFrame
         ? { videoUrl: vUrl, ...(tEnd !== undefined ? { timeSeconds: tEnd } : { lastFrame: true }) }
         : { videoUrl: vUrl, timeSeconds: tStart ?? 0 };
-      const r = await fetch("/api/extract-frame", { method: "POST", headers, body: JSON.stringify(body) });
+      const r = await appFetch("/api/extract-frame", { method: "POST", headers, body: JSON.stringify(body) });
       const j = await r.json();
       if (j.cdnUrl) {
         const field = isLastFrame ? "eagerEndFrameUrl" : "eagerStartFrameUrl";
@@ -396,7 +400,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
     const authHeaders: Record<string, string> = {};
 
     try {
-      const lookupRes = await fetch(`/api/lookup-asset?hash=${hash}`, { headers: authHeaders });
+      const lookupRes = await appFetch(`/api/lookup-asset?hash=${hash}`, { headers: authHeaders });
       const { cdnUrl: cached } = await lookupRes.json() as { cdnUrl: string | null };
       if (cached) {
         updateNodeData(id, { videoUrl: cached, videoAspectRatio: undefined, capturedFrameUrl: undefined });
@@ -411,7 +415,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
     setUploading(true);
 
     try {
-      const res  = await fetch("/api/upload-asset", {
+      const res  = await appFetch("/api/upload-asset", {
         method: "POST",
         headers: { "Content-Type": file.type || "video/mp4", ...authHeaders },
         body: bytes,
@@ -721,7 +725,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video
             ref={videoRef}
-            src={baseVideoUrl}
+            src={appPath(baseVideoUrl)}
             className="w-full h-full block"
             style={{
               objectFit: "fill",
@@ -772,7 +776,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <video
               ref={topVideoRef}
-              src={topVideoUrl}
+              src={appPath(topVideoUrl)}
               autoPlay
               muted
               playsInline
@@ -807,7 +811,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
           {viewMode === "frame" && displayFrameUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={displayFrameUrl}
+              src={appPath(displayFrameUrl)}
               alt="Captured frame"
               className="absolute inset-0 w-full h-full block"
               style={{ objectFit: "fill", zIndex: 5 }}
@@ -863,7 +867,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
                   {displayFrameUrl ? (
                     <div style={{
                       width: 22, height: 22, borderRadius: "50%",
-                      backgroundImage: `url(${displayFrameUrl})`,
+                      backgroundImage: `url(${appPath(displayFrameUrl)})`,
                       backgroundSize: "cover", backgroundPosition: "center",
                       flexShrink: 0,
                     }} />
@@ -1150,7 +1154,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
               {/* Layer 1: optimized image (loads in background) */}
               {capturedFrameUrl.startsWith("https://") ? (
                 <NextImage
-                  src={capturedFrameUrl}
+                  src={appPath(capturedFrameUrl)}
                   alt="Captured frame"
                   fill
                   quality={30}
@@ -1160,7 +1164,7 @@ export default function VideoInputNode({ id, data, selected }: NodeProps<VideoIn
                 />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={capturedFrameUrl} alt="Captured frame" className="w-full h-full" style={{ objectFit: "fill" }} />
+                <img src={appPath(capturedFrameUrl)} alt="Captured frame" className="w-full h-full" style={{ objectFit: "fill" }} />
               )}
 
               {/* Layer 2: blur overlay — fades out once optimized image loads */}

@@ -1,3 +1,5 @@
+import { logicalAppPath } from "@/lib/appPaths";
+import { appFetch } from "@/lib/appPaths";
 /**
  * Export a workflow ("space") to a self-contained `.zip`:
  *
@@ -19,7 +21,8 @@ const ASSET_PREFIX = "assets/";
 function looksLikeAssetUrl(v: unknown): v is string {
   if (typeof v !== "string" || !v) return false;
   return (
-    v.startsWith("/generated/") ||
+    logicalAppPath(v).startsWith("/generated/") ||
+    logicalAppPath(v).startsWith("/api/media/") ||
     v.startsWith("http://") ||
     v.startsWith("https://") ||
     v.startsWith("data:image/") ||
@@ -62,7 +65,7 @@ async function fetchAsset(url: string): Promise<{ bytes: Uint8Array; contentType
     const { bytes, contentType } = dataUrlToBytes(url);
     return { bytes, contentType };
   }
-  const res = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=asset`);
+  const res = await appFetch(`/api/download?url=${encodeURIComponent(url)}&filename=asset`);
   if (!res.ok) throw new Error(`fetch ${url} → ${res.status}`);
   const buf = await res.arrayBuffer();
   return { bytes: new Uint8Array(buf), contentType: res.headers.get("content-type") ?? "" };

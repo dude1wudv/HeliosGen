@@ -1,3 +1,4 @@
+import { appPath } from "@/lib/appPaths";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const SIGNATURE_TTL_SECONDS = 15 * 60;
@@ -16,7 +17,7 @@ function digest(assetId: string, userId: string, expires: number): Buffer {
 export function createMediaSignature(assetId: string, userId: string, origin: string): string {
   const expires = Math.floor(Date.now() / 1000) + SIGNATURE_TTL_SECONDS;
   const signature = digest(assetId, userId, expires).toString("base64url");
-  const url = new URL(`/api/media/${encodeURIComponent(assetId)}`, origin);
+  const url = new URL(appPath(`/api/media/${encodeURIComponent(assetId)}`), origin);
   url.searchParams.set("user", userId);
   url.searchParams.set("expires", String(expires));
   url.searchParams.set("sig", signature);
@@ -42,7 +43,7 @@ function callbackDigest(expires: number): Buffer {
 
 export function createKieCallbackUrl(origin: string): string {
   const expires = Math.floor(Date.now() / 1000) + SIGNATURE_TTL_SECONDS;
-  const url = new URL("/api/callback", origin);
+  const url = new URL(appPath("/api/callback"), origin);
   url.searchParams.set("expires", String(expires));
   url.searchParams.set("sig", callbackDigest(expires).toString("base64url"));
   return url.toString();

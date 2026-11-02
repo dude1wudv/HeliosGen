@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { Sub2ApiImageRequest } from "@/lib/sub2api/images";
 
 const dataDir = mkdtempSync(join(tmpdir(), "helios-sub2api-provider-"));
 process.env.HELIOS_DATA_DIR = dataDir;
@@ -23,7 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const baseRequest = (overrides: Partial<imageAdapter.Sub2ApiImageRequest> = {}): imageAdapter.Sub2ApiImageRequest => ({
+const baseRequest = (overrides: Partial<Sub2ApiImageRequest> = {}): Sub2ApiImageRequest => ({
   apiBaseUrl: "https://sub2api",
   apiKey: "synthetic-api-key",
   userId: "user-a",
@@ -108,6 +109,8 @@ describe("Sub2API image adapter", () => {
 
     const failure = await imageAdapter.generateSub2ApiImage(baseRequest()).catch((error: unknown) => error as Error & { status?: number; code?: string });
     expect(failure).toMatchObject({ status: 429, code: "rate_limited" });
+    expect(failure).toBeInstanceOf(Error);
+    if (!(failure instanceof Error)) throw new Error("Expected the upstream request to fail");
     expect(failure.message).toBe("upstream is temporarily unavailable with diagnostic details");
     expect(failure.message).not.toContain(JSON.stringify(upstreamBody));
   });

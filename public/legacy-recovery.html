@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>旧画布工作流恢复</title>
+<style>body{margin:0;background:#fffdf7;color:#22231f;font:15px/1.7 system-ui,sans-serif}main{max-width:720px;margin:8vh auto;padding:24px}h1{font-size:28px}button,a.action{display:inline-block;border:1px solid #22231f;border-radius:12px;padding:12px 18px;background:#22231f;color:#fffdf7;font:inherit;text-decoration:none;cursor:pointer}button:disabled{opacity:.5;cursor:default}section{border:1px solid #e8e4da;border-radius:12px;padding:22px;margin:24px 0}li{overflow-wrap:anywhere}a{color:inherit}small{display:block;color:#616259}#status{white-space:pre-wrap}button:focus-visible,a:focus-visible{outline:3px solid #80663f;outline-offset:4px}</style>
+<main><h1>画布已迁至主站</h1><p>旧浏览器中可能还有未同步的工作流。先导出恢复文件，再到新入口导入副本。此页只读取工作流，不修改或删除浏览器数据，也不会上传任何内容。</p>
+<section><h2>本机工作流</h2><p id="status" role="status">正在读取…</p><ul id="workflows"></ul><button id="export" disabled>导出工作流恢复文件</button><small>这是工作流 JSON 备份，不包含媒体文件。原媒体仍受账户访问权限保护；需要完整媒体备份时，请在新画布逐个导出 ZIP，并确认没有缺失媒体。</small></section>
+<p><a class="action" href="https://patrickapi.microedulab.com/cancas/recover" rel="noreferrer">前往新画布导入</a></p><p><a href="https://patrickapi.microedulab.com/helios" rel="noreferrer">通过主站重新登录画布</a></p></main>
+<script>
+"use strict";
+// Read only this application-owned key. Never enumerate storage, cookies or session tokens.
+let workflows=[];
+const status=document.getElementById("status"), list=document.getElementById("workflows"), button=document.getElementById("export");
+try{
+  const raw=localStorage.getItem("heliosgen");
+  if(raw&&raw.length>50*1024*1024)throw Error("本地数据超过 50 MB，请保留当前浏览器数据并联系支持协助恢复。");
+  const parsed=raw?JSON.parse(raw):null;
+  const state=parsed&&typeof parsed==="object"?(parsed.state||parsed):null;
+  const saved=state&&Array.isArray(state.spaces)?state.spaces:[];
+  workflows=saved.filter(s=>s&&typeof s==="object"&&Array.isArray(s.nodes)&&Array.isArray(s.edges)).map(s=>({id:String(s.id||""),name:typeof s.name==="string"?s.name:"未命名工作流",nodes:s.nodes,edges:s.edges,nodeCounters:s.nodeCounters||{},viewport:s.viewport,createdAt:s.createdAt,updatedAt:s.updatedAt}));
+  // The active draft can be newer than the saved space snapshot.
+  const active=workflows.find(s=>s.id===state?.activeSpaceId);
+  if(active&&Array.isArray(state.nodes)&&Array.isArray(state.edges)){active.nodes=state.nodes;active.edges=state.edges;active.nodeCounters=state.nodeCounters||active.nodeCounters;}
+  for(const workflow of workflows){const li=document.createElement("li");li.textContent=workflow.name+" · "+workflow.nodes.length+" 个节点";list.appendChild(li);}
+  status.textContent=workflows.length?"找到 "+workflows.length+" 个本机工作流。请先导出，再前往新画布。":"当前浏览器未发现旧画布工作流。若曾使用其他浏览器或设备，请在原设备打开此页检查。";
+  button.disabled=!workflows.length;
+}catch(error){status.textContent="无法读取本机工作流。请不要清除浏览器数据。"+(error instanceof Error?error.message:"");}
+button.addEventListener("click",async()=>{
+  button.disabled=true;
+  try{
+    const manifest=await Promise.all(workflows.map(async workflow=>{const bytes=new TextEncoder().encode(JSON.stringify(workflow));const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(b=>b.toString(16).padStart(2,"0")).join("");return{id:workflow.id,name:workflow.name,nodes:workflow.nodes.length,sha256:hash};}));
+    const result={format:"heliosgen-recovery",version:1,exportedAt:new Date().toISOString(),workflows,manifest};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:"application/json"}));
+    const a=document.createElement("a");a.href=url;a.download="helios-workflows-recovery-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+    status.textContent="已生成恢复文件，请确认浏览器下载完成。原浏览器数据仍保留；新画布会导入为副本。";
+  }catch{status.textContent="导出失败，请保留浏览器数据并重试。";}finally{button.disabled=!workflows.length;}
+});
+</script></html>

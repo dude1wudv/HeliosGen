@@ -1,4 +1,6 @@
 "use client";
+import { appFetch } from "@/lib/appPaths";
+
 import { useEffect, useState } from "react";
 import GitHubButton from "react-github-btn";
 import {
@@ -61,7 +63,7 @@ export default function PublicWorkflowViewer({ id }: { id: string }) {
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange);
 
   useEffect(() => {
-    fetch(`/api/public/space/${id}`)
+    appFetch(`/api/public/space/${id}`)
       .then((r) => {
         if (!r.ok) throw new Error("Workflow not found or not public");
         return r.json();

@@ -1,3 +1,5 @@
+import { logicalAppPath } from "@/lib/appPaths";
+import { appFetch } from "@/lib/appPaths";
 import { NextRequest, NextResponse } from "next/server";
 import https from "node:https";
 import { spawn } from "node:child_process";
@@ -83,6 +85,7 @@ function httpsPost(
 // Resolve remote references through the shared DNS, redirect, timeout, and
 // response-size policy. Local media URLs are resolved by the Sub2API adapter.
 async function fetchBuffer(url: string, userId: string): Promise<Buffer> {
+  url = logicalAppPath(url);
   if (url.startsWith("/api/media/")) {
     const id = url.slice("/api/media/".length).split(/[?#/]/, 1)[0];
     const asset = id ? guestDb.getMediaAsset(id, userId) : null;
@@ -615,7 +618,7 @@ export async function POST(req: NextRequest) {
 
     const requestBody = { model: resolvedApiId, callBackUrl, input };
 
-    const res = await fetch(CREATE, {
+    const res = await appFetch(CREATE, {
       method:  "POST",
       headers: { Authorization: `Bearer ${kieToken}`, "Content-Type": "application/json" },
       body:    JSON.stringify(requestBody),

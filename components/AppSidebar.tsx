@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 
 import * as React from "react";
 import Link from "next/link";
@@ -137,7 +141,7 @@ function GitHubButtons() {
   const [stats, setStats] = React.useState<{ stars: number; forks: number } | null>(null);
 
   React.useEffect(() => {
-    fetch("https://api.github.com/repos/segfault42/HeliosGen")
+    appFetch("https://api.github.com/repos/segfault42/HeliosGen")
       .then(r => r.json())
       .then(d => setStats({ stars: d.stargazers_count, forks: d.forks_count }))
       .catch(() => {});
@@ -655,7 +659,7 @@ const AllAssetsRow = React.memo(function AllAssetsRow({ isActive, count, onSelec
 
 // ── Static icons ──────────────────────────────────────────────────────────────
 function LogoIcon() {
-  return <Image src="/HG.svg" alt="Logo" width={26} height={26} />;
+  return <Image src={appPath("/HG.svg")} alt="Logo" width={26} height={26} />;
 }
 
 function CreditIcon({ size = 12 }: { size?: number }) {
@@ -689,11 +693,11 @@ export function AppSidebar() {
 
   React.useEffect(() => {
     if (process.env.NEXT_PUBLIC_GUEST_MODE === "true" || MANAGED_MODE) {
-      fetch("/api/settings/kie-key")
+      appFetch("/api/settings/kie-key")
         .then((r) => r.json())
         .then((d) => setKieKeySet(!!d.hasToken))
         .catch(() => setKieKeySet(null));
-      fetch("/api/settings/azure-key")
+      appFetch("/api/settings/azure-key")
         .then((r) => r.json())
         .then((d) => setAzureKeySet(!!d.hasToken))
         .catch(() => setAzureKeySet(null));
@@ -707,11 +711,11 @@ export function AppSidebar() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (session?.access_token) {
-        fetch("/api/settings/kie-key", { headers: { Authorization: `Bearer ${session.access_token}` } })
+        appFetch("/api/settings/kie-key", { headers: { Authorization: `Bearer ${session.access_token}` } })
           .then((r) => r.json())
           .then((d) => setKieKeySet(!!d.hasToken))
           .catch(() => {});
-        fetch("/api/settings/azure-key", { headers: { Authorization: `Bearer ${session.access_token}` } })
+        appFetch("/api/settings/azure-key", { headers: { Authorization: `Bearer ${session.access_token}` } })
           .then((r) => r.json())
           .then((d) => setAzureKeySet(!!d.hasToken))
           .catch(() => {});
@@ -731,7 +735,7 @@ export function AppSidebar() {
   React.useEffect(() => {
     const fetchBalance = async () => {
       if (MANAGED_MODE) {
-        const res = await fetch("/api/credit");
+        const res = await appFetch("/api/credit");
         if (!res.ok) return;
         const data = await res.json();
         const val = typeof data?.data === "number"
@@ -746,7 +750,7 @@ export function AppSidebar() {
         const headers: HeadersInit = session?.access_token
           ? { Authorization: `Bearer ${session.access_token}` }
           : {};
-        const res = await fetch("/api/credit", { headers });
+        const res = await appFetch("/api/credit", { headers });
         if (!res.ok) return;
         const data = await res.json();
         const val = typeof data?.data === "number"
@@ -763,7 +767,7 @@ export function AppSidebar() {
 
   const signOut = async () => {
     if (MANAGED_MODE) {
-      await fetch("/api/logout", { method: "POST" });
+      await appFetch("/api/logout", { method: "POST" });
     } else {
       await supabase?.auth.signOut();
     }

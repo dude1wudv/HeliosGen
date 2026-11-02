@@ -1,3 +1,5 @@
+import { logicalAppPath } from "@/lib/appPaths";
+import { appFetch } from "@/lib/appPaths";
 import { create } from "zustand";
 import { flushSync } from "react-dom";
 import { getToken } from "./galleryUtils";
@@ -44,7 +46,7 @@ export const useChatStreamingStore = create<ChatStreamingState>()((set, get) => 
     (async () => {
       try {
         const token = await getToken();
-        const res = await fetch("/api/assistant", {
+        const res = await appFetch("/api/assistant", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -102,7 +104,7 @@ export const useChatStreamingStore = create<ChatStreamingState>()((set, get) => 
 
         // Notify if user has navigated away from this chat
         const isViewingChat =
-          window.location.pathname === "/chat" &&
+          logicalAppPath(window.location.pathname) === "/chat" &&
           new URLSearchParams(window.location.search).get("id") === sessionId;
         if (!isViewingChat) {
           const sessionTitle = useChatSessionStore.getState().sessions.find((s) => s.id === sessionId)?.title ?? "Chat";

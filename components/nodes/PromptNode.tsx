@@ -1,4 +1,6 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
 import {
   useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo,
   type ReactNode,
@@ -921,11 +923,11 @@ export default function PromptNode({ id, data, selected }: NodeProps<PromptNodeT
                   <div className="w-6 h-6 rounded bg-[#1A1A1A] overflow-hidden shrink-0 flex items-center justify-center">
                     {imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbSrc(imageUrl, 24)} alt="" className="w-full h-full object-cover" />
+                      <img src={appPath(thumbSrc(imageUrl, 24))} alt="" className="w-full h-full object-cover" />
                     ) : videoUrl ? (
                       // eslint-disable-next-line jsx-a11y/media-has-caption
                       <video
-                        src={videoUrl}
+                        src={appPath(videoUrl)}
                         autoPlay
                         loop
                         muted
@@ -1061,8 +1063,8 @@ export default function PromptNode({ id, data, selected }: NodeProps<PromptNodeT
                     <button key={n.id} onClick={() => insertMentionModal(label)}
                       className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${active ? "bg-[#1A2010]" : "hover:bg-[#141C28]"}`}>
                       <div className="w-5 h-5 rounded bg-[#1A1A1A] overflow-hidden shrink-0 flex items-center justify-center">
-                        {imageUrl ? <img src={thumbSrc(imageUrl, 20)} alt="" className="w-full h-full object-cover" /> :
-                          videoUrl ? <video src={videoUrl} autoPlay loop muted playsInline className="w-full h-full" style={{ objectFit: "cover" }} /> :
+                        {imageUrl ? <img src={appPath(thumbSrc(imageUrl, 20))} alt="" className="w-full h-full object-cover" /> :
+                          videoUrl ? <video src={appPath(videoUrl)} autoPlay loop muted playsInline className="w-full h-full" style={{ objectFit: "cover" }} /> :
                             <EmptyThumb />}
                       </div>
                       <span className={`text-[11px] font-medium truncate ${active ? "text-[#2DD4BF]" : "text-[#CCC]"}`}>@{label}</span>
@@ -1111,14 +1113,14 @@ export default function PromptNode({ id, data, selected }: NodeProps<PromptNodeT
               {chipPopover.preview.videoUrl ? (
                 // eslint-disable-next-line jsx-a11y/media-has-caption
                 <video
-                  src={chipPopover.preview.videoUrl}
+                  src={appPath(chipPopover.preview.videoUrl)}
                   autoPlay loop muted playsInline
                   style={{ display: "block", width: "100%", height: "auto" }}
                 />
               ) : chipPopover.preview.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={thumbSrc(chipPopover.preview.imageUrl, 140)}
+                  src={appPath(thumbSrc(chipPopover.preview.imageUrl, 140))}
                   alt=""
                   style={{ display: "block", width: "100%", height: "auto" }}
                 />

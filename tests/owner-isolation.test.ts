@@ -61,7 +61,7 @@ function cookieFor(userId: string): string {
   return `${session.SESSION_COOKIE}=${encodeURIComponent(value)}`;
 }
 
-function request(path: string, userId?: string, init: RequestInit = {}): NextRequest {
+function request(path: string, userId?: string, init: NonNullable<ConstructorParameters<typeof NextRequest>[1]> = {}): NextRequest {
   const headers = new Headers(init.headers);
   if (userId) headers.set("cookie", cookieFor(userId));
   return new NextRequest(`https://canvas.test${path}`, { ...init, headers });

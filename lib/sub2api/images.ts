@@ -1,3 +1,5 @@
+import { logicalAppPath } from "@/lib/appPaths";
+import { appFetch } from "@/lib/appPaths";
 import { randomUUID } from "node:crypto";
 import { fetchSafeBuffer } from "@/lib/ssrf";
 import { getMediaAsset } from "@/lib/guest/db";
@@ -58,6 +60,7 @@ function safeError(status: number, body: string): Error & { status?: number; cod
 }
 
 async function readImage(value: string, userId: string): Promise<{ buffer: Buffer; mimeType: string; name: string }> {
+  value = logicalAppPath(value);
   if (value.startsWith("data:")) {
     const match = value.match(/^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/);
     if (!match) throw new Error("Invalid image data");
@@ -107,7 +110,7 @@ export async function generateSub2ApiImage(request: Sub2ApiImageRequest): Promis
   const images = (request.imageUrls ?? []).slice(0, 16);
   const authorization = `Bearer ${request.apiKey}`;
   if (images.length === 0) {
-    const response = await fetch(endpoint(request.apiBaseUrl, "/images/generations"), {
+    const response = await appFetch(endpoint(request.apiBaseUrl, "/images/generations"), {
       method: "POST",
       headers: { Authorization: authorization, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ model: "gpt-image-2", prompt: request.prompt, n: 1, size, quality, output_format: "png", response_format: "b64_json" }),
@@ -126,7 +129,7 @@ export async function generateSub2ApiImage(request: Sub2ApiImageRequest): Promis
     const image = await readImage(value, request.userId);
     form.append("image", new Blob([Uint8Array.from(image.buffer)], { type: image.mimeType }), image.name);
   }
-  const response = await fetch(endpoint(request.apiBaseUrl, "/images/edits"), {
+  const response = await appFetch(endpoint(request.apiBaseUrl, "/images/edits"), {
     method: "POST",
     headers: { Authorization: authorization, Accept: "application/json" },
     body: form,

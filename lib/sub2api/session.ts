@@ -4,13 +4,15 @@ import {
   randomBytes,
 } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
+import { APP_BASE_PATH } from "@/lib/appPaths";
 import {
   HELIOS_PUBLIC_ORIGIN,
   MANAGED_MODE,
   isLoopbackHttpOrigin,
 } from "@/lib/managedMode";
 
-export const SESSION_COOKIE = "__Host-helios_session";
+export const SESSION_COOKIE = APP_BASE_PATH ? "__Secure-helios_session" : "__Host-helios_session";
+export const SESSION_COOKIE_PATH = APP_BASE_PATH || "/";
 export const SESSION_VERSION = "v1";
 export const SESSION_TTL_SECONDS = 86_400;
 
@@ -113,7 +115,7 @@ export function setSessionCookie(response: NextResponse, session: Omit<Sub2ApiSe
     httpOnly: true,
     secure: secureCookie(),
     sameSite: "lax",
-    path: "/",
+    path: SESSION_COOKIE_PATH,
     maxAge: SESSION_TTL_SECONDS,
   });
 }
@@ -125,7 +127,7 @@ export function clearSessionCookie(response: NextResponse): void {
     httpOnly: true,
     secure: secureCookie(),
     sameSite: "lax",
-    path: "/",
+    path: SESSION_COOKIE_PATH,
     maxAge: 0,
   });
 }

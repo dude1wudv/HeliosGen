@@ -1,4 +1,6 @@
 "use client";
+import { appFetch } from "@/lib/appPaths";
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { flushSync } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
@@ -118,7 +120,7 @@ export function QuickAssist() {
         azureDeployment: loadAzureTextDeployment(),
         azureModelName:  loadAzureTextModelName(),
       } : {};
-      const res = await fetch("/api/assistant", {
+      const res = await appFetch("/api/assistant", {
         method: "POST",
         headers: reqHeaders,
         body: JSON.stringify({

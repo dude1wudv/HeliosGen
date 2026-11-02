@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 
 import { useEffect, useState } from "react";
 
@@ -21,14 +25,14 @@ export default function BootstrapPage() {
 
     (async () => {
       try {
-        const response = await fetch("/api/integrations/sub2api/bootstrap", {
+        const response = await appFetch("/api/integrations/sub2api/bootstrap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
           body: JSON.stringify({ code }),
         });
         if (!response.ok) throw new Error("bootstrap failed");
-        if (!cancelled) window.location.replace("/workflow");
+        if (!cancelled) window.location.replace(appPath("/workflow"));
       } catch {
         if (!cancelled) setMessage("This workspace link is invalid or expired. Return to Sub2API and try again.");
       }

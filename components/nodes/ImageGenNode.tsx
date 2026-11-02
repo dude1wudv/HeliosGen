@@ -1,4 +1,6 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
 import { Handle, Position, NodeProps, Node } from "@xyflow/react";
 import { useWorkflowStore, NodeData } from "@/lib/store";
 import { useRef } from "react";
@@ -79,7 +81,7 @@ export default function ImageGenNode({ id, data }: NodeProps<ImageGenNodeType>) 
           {data.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={data.imageUrl}
+              src={appPath(data.imageUrl)}
               alt="Generated"
               className="w-full object-cover"
             />
@@ -92,7 +94,7 @@ export default function ImageGenNode({ id, data }: NodeProps<ImageGenNodeType>) 
 
         {data.imageUrl && (
           <a
-            href={data.imageUrl}
+            href={appPath(data.imageUrl)}
             target="_blank"
             rel="noreferrer"
             className="block text-center text-xs text-blue-400 hover:text-blue-300"

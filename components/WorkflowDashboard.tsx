@@ -1,8 +1,11 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import NextImage from "next/image";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkflowStore, Space } from "@/lib/store";
 import { makeUGCTemplate } from "@/lib/templates";
@@ -197,7 +200,7 @@ function TemplateCard({ onLoad, onReset }: { onLoad: () => void; onReset: (e: Re
       <div className="wsd-thumbs">
         {TEMPLATE_PREVIEWS.map((url, i) => (
           <div key={i} className="wsd-thumb-cell">
-            <NextImage src={url} alt="" fill sizes="160px" style={{ objectFit: "cover" }} />
+            <NextImage src={appPath(url)} alt="" fill sizes="160px" style={{ objectFit: "cover" }} />
           </div>
         ))}
         <div className="wsd-thumb-overlay" />
@@ -272,12 +275,12 @@ function ThumbnailMosaic({ space }: { space: Space }) {
             {item ? (
               item.type === "video" ? (
                 <video
-                  src={item.url}
+                  src={appPath(item.url)}
                   muted loop playsInline autoPlay preload="metadata"
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                 />
               ) : (
-                <NextImage src={item.url} alt="" fill sizes="160px" style={{ objectFit: "cover" }} />
+                <NextImage src={appPath(item.url)} alt="" fill sizes="160px" style={{ objectFit: "cover" }} />
               )
             ) : (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -718,6 +721,7 @@ export default function WorkflowDashboard() {
           </div>
 
           <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}>
+            {user && <Link href="/recover" className="mr-4 text-sm text-white/70 underline">导入 / 恢复工作流</Link>}
             {user ? (
               <button className="wsd-new-btn" onClick={handleCreate}>
                 <PlusIcon />

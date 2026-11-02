@@ -1,4 +1,6 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
 import { useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -81,7 +83,7 @@ function RichToastItem({ toast, onDismiss, onClick }: { toast: Toast; onDismiss:
         display: "flex", alignItems: "center", justifyContent: "center",
         flexShrink: 0, overflow: "hidden",
       }}>
-        <Image src="/HG.svg" alt="HeliosGen" width={32} height={32} />
+        <Image src={appPath("/HG.svg")} alt="HeliosGen" width={32} height={32} />
       </div>
 
       {/* Text */}

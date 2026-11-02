@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_BASE_PATH: /cancas
     image: heliosgen:managed
     container_name: heliosgen
     restart: unless-stopped
@@ -16,7 +18,8 @@ services:
       HELIOS_MEDIA_DIR: /data/media
       SUB2API_MANAGED_MODE: "true"
       NEXT_PUBLIC_SUB2API_MANAGED_MODE: "true"
-      HELIOS_PUBLIC_ORIGIN: https://canvas.sub.sunmmyapi.xyz
+      HELIOS_PUBLIC_ORIGIN: https://patrickapi.microedulab.com
+      NEXT_PUBLIC_APP_BASE_PATH: /cancas
       SUB2API_INTERNAL_BASE_URL: http://sub2api:8080/api/v1
       NODE_OPTIONS: --max-old-space-size=1536
     mem_limit: 2g

@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useReactFlow } from "@xyflow/react";
@@ -186,7 +190,7 @@ export default function AddNodeMenu({ anchorRect, onClose }: AddNodeMenuProps) {
             imageNaturalRatio: `${img.naturalWidth} / ${img.naturalHeight}`,
           });
         };
-        img.src = blobUrl;
+        img.src = appPath(blobUrl);
       }
 
       const bytes = await file.arrayBuffer();
@@ -194,7 +198,7 @@ export default function AddNodeMenu({ anchorRect, onClose }: AddNodeMenuProps) {
       const headers: Record<string, string> = { "Content-Type": file.type || (isVideo ? "video/mp4" : "image/jpeg") };
       if (token) headers["Authorization"] = `Bearer ${token}`;
       try {
-        const res = await fetch("/api/upload-asset", {
+        const res = await appFetch("/api/upload-asset", {
           method: "POST",
           headers,
           body: bytes,
@@ -232,7 +236,7 @@ export default function AddNodeMenu({ anchorRect, onClose }: AddNodeMenuProps) {
           };
           img.onload = finish;
           img.onerror = () => { done = true; resolve(undefined); };
-          img.src = thumbnailSrc;
+          img.src = appPath(thumbnailSrc);
           if (img.complete && img.naturalWidth > 0) finish();
         });
         addNextToToolbar("imageInputNode", {

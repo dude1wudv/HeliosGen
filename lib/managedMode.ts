@@ -10,7 +10,7 @@ export const MANAGED_MODE =
   process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true";
 
 export const HELIOS_PUBLIC_ORIGIN =
-  process.env.HELIOS_PUBLIC_ORIGIN ?? "https://canvas.sub.sunmmyapi.xyz";
+  process.env.HELIOS_PUBLIC_ORIGIN ?? "https://patrickapi.microedulab.com";
 
 export function isLoopbackHttpOrigin(origin: string): boolean {
   try {

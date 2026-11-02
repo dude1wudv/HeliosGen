@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GalleryItem, galleryCache, getToken, thumbSrc } from "@/lib/galleryUtils";
@@ -55,7 +59,7 @@ function PickerImage({ src }: { src: string }) {
       {status !== "error" && (
         <img
           alt=""
-          src={thumbUrl}
+          src={appPath(thumbUrl)}
           loading="lazy"
           decoding="async"
           onLoad={() => setStatus("loaded")}
@@ -163,7 +167,7 @@ export function MediaPickerModal({
     setUrlLoading(true);
     try {
       const token = await getToken();
-      const res = await fetch("/api/fetch-url", {
+      const res = await appFetch("/api/fetch-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -240,7 +244,7 @@ export function MediaPickerModal({
       if (needsImg) {
         const nextPage = imagePageRef.current + 1;
         fetches.push(
-          fetch(`/api/gallery?type=image&page=${nextPage}`, { headers: { Authorization: `Bearer ${token}` } })
+          appFetch(`/api/gallery?type=image&page=${nextPage}`, { headers: { Authorization: `Bearer ${token}` } })
             .then(r => r.ok ? r.json() as Promise<{ items: GalleryItem[]; hasMore: boolean }> : null)
             .then(data => {
               if (!data) return;
@@ -253,7 +257,7 @@ export function MediaPickerModal({
       if (needsVid) {
         const nextPage = videoPageRef.current + 1;
         fetches.push(
-          fetch(`/api/gallery?type=video&page=${nextPage}`, { headers: { Authorization: `Bearer ${token}` } })
+          appFetch(`/api/gallery?type=video&page=${nextPage}`, { headers: { Authorization: `Bearer ${token}` } })
             .then(r => r.ok ? r.json() as Promise<{ items: GalleryItem[]; hasMore: boolean }> : null)
             .then(data => {
               if (!data) return;
@@ -306,8 +310,8 @@ export function MediaPickerModal({
 
       if (mediaKind === "any") {
         const [imgRes, vidRes] = await Promise.all([
-          fetch("/api/gallery?type=image&page=0", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/gallery?type=video&page=0", { headers: { Authorization: `Bearer ${token}` } }),
+          appFetch("/api/gallery?type=image&page=0", { headers: { Authorization: `Bearer ${token}` } }),
+          appFetch("/api/gallery?type=video&page=0", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         const [imgData, vidData] = await Promise.all([
           imgRes.ok ? (imgRes.json() as Promise<{ items: GalleryItem[]; hasMore: boolean }>) : Promise.resolve({ items: [] as GalleryItem[], hasMore: false }),
@@ -317,7 +321,7 @@ export function MediaPickerModal({
         videoHasMoreRef.current = vidData.hasMore;
         setSourceItems(prev => mergeByNewest(prev, [...imgData.items, ...vidData.items]));
       } else {
-        const res = await fetch(`/api/gallery?type=${mediaKind}&page=0`, {
+        const res = await appFetch(`/api/gallery?type=${mediaKind}&page=0`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -609,7 +613,7 @@ export function MediaPickerModal({
                   >
                     {item.mediaType === "video" ? (
                       <video
-                        src={item.url}
+                        src={appPath(item.url)}
                         muted
                         playsInline
                         preload="metadata"
@@ -617,7 +621,7 @@ export function MediaPickerModal({
                         onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 0.001; }}
                       />
                     ) : (
-                      <PickerImage src={item.url} />
+                      <PickerImage src={appPath(item.url)} />
                     )}
                     {item.mediaType === "video" && (
                       <div className="picker-play-icon" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", transition: "opacity 120ms" }}>
@@ -670,7 +674,7 @@ export function MediaPickerModal({
         >
           {previewItem.mediaType === "video" ? (
             <video
-              src={previewItem.url}
+              src={appPath(previewItem.url)}
               controls
               autoPlay
               onClick={(e) => e.stopPropagation()}
@@ -679,7 +683,7 @@ export function MediaPickerModal({
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={previewItem.url}
+              src={appPath(previewItem.url)}
               alt=""
               onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: "10px", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}

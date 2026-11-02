@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/appPaths";
 /**
  * Desktop / guest-mode replacement for the kie.ai webhook (`/api/callback`).
  *
@@ -72,7 +73,7 @@ async function loop(taskId: string, apiKey: string, kind: Kind): Promise<void> {
 
     let data: Record<string, unknown>;
     try {
-      const res = await fetch(
+      const res = await appFetch(
         `${BASE}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
         { headers: { Authorization: `Bearer ${apiKey}` } },
       );

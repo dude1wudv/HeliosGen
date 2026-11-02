@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import { useCallback, useEffect, useRef, useState, Fragment } from "react";
 import { useAnimatedPopup } from "@/lib/useAnimatedPopup";
 import { createPortal } from "react-dom";
@@ -328,7 +332,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
     const filename = `image-${Date.now()}.png`;
     setIsSaving(true);
     try {
-      const resp = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=${filename}`);
+      const resp = await appFetch(`/api/download?url=${encodeURIComponent(url)}&filename=${filename}`);
       const blob = await resp.blob();
       const obj = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -476,7 +480,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
     img.onload = () => {
       if (!cancelled) updateNodeData(id, { imageNaturalRatio: `${img.naturalWidth} / ${img.naturalHeight}` });
     };
-    img.src = url;
+    img.src = appPath(url);
     return () => { cancelled = true; };
   }, [data.imageUrl, id, updateNodeData]);
 
@@ -508,7 +512,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
 
     const doPoll = async () => {
       try {
-        const res = await fetch(`/api/job-status?taskId=${taskId}`);
+        const res = await appFetch(`/api/job-status?taskId=${taskId}`);
         const json = await res.json();
         if (cancelled) return;
 
@@ -596,7 +600,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
         ? { videoUrl, timeSeconds: trimEnd }
         : { videoUrl, timeSeconds: trimStart ?? 0 };
       try {
-        const r = await fetch("/api/extract-frame", {
+        const r = await appFetch("/api/extract-frame", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
           body: JSON.stringify(extractBody),
@@ -689,7 +693,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
     if (debugMode) {
       setLoading(true);
       try {
-        await fetch("/api/generate", {
+        await appFetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...payload, debugOnly: true }),
@@ -711,7 +715,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
       setLoading(true);
       updateNodeData(id, { status: "running" });
       try {
-        const res = await fetch("/api/generate", {
+        const res = await appFetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
           body: JSON.stringify(payload),
@@ -1009,7 +1013,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
                   ) : (
                     <Image
                       ref={i === currentGenIdx ? nodeImgRef : undefined}
-                      src={entry as string}
+                      src={appPath(entry as string)}
                       alt="Generated"
                       fill
                       quality={30}
@@ -1501,7 +1505,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
             {/* Full-res image */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={data.imageUrl as string}
+              src={appPath(data.imageUrl as string)}
               alt="Full quality"
               className="block max-w-[90vw] max-h-[90vh] object-contain"
               onLoad={() => setLightboxImgLoaded(true)}
@@ -1510,7 +1514,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
             {blurSrc && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={blurSrc}
+                src={appPath(blurSrc)}
                 alt=""
                 aria-hidden
                 className={`absolute inset-0 w-full h-full object-contain${lightboxImgLoaded ? "" : " lightbox-blur-pulse"}`}

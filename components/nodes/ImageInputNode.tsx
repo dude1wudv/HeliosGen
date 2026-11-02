@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import { useRef, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import NextImage from "next/image";
@@ -85,7 +89,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
         if (src.startsWith("data:") || src.startsWith("http")) {
           (async () => {
             try {
-              const r = await fetch("/api/upload", {
+              const r = await appFetch("/api/upload", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ dataUrl: src, folder: "uploads", mimeType }),
@@ -98,7 +102,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
           })();
         }
       };
-      img.src = src;
+      img.src = appPath(src);
     },
     [id, updateNodeData]
   );
@@ -113,7 +117,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
 
       // ── Cache lookup: skip upload if already in R2 ───────────────────────
       try {
-        const lookupRes = await fetch(`/api/lookup-asset?hash=${hash}`, { headers: authHeaders });
+        const lookupRes = await appFetch(`/api/lookup-asset?hash=${hash}`, { headers: authHeaders });
         const { cdnUrl } = await lookupRes.json() as { cdnUrl: string | null };
         if (cdnUrl) {
           // Already uploaded — use existing URL directly
@@ -123,7 +127,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
             imageNaturalRatio: `${img.naturalWidth} / ${img.naturalHeight}`,
             r2Url:             cdnUrl,
           });
-          img.src = cdnUrl;
+          img.src = appPath(cdnUrl);
           return;
         }
       } catch {
@@ -139,7 +143,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
           imageNaturalRatio: `${img.naturalWidth} / ${img.naturalHeight}`,
         });
       };
-      img.src = blobUrl;
+      img.src = appPath(blobUrl);
 
       // ── Upload raw bytes to R2 (hash stored server-side) ──────────────────
       try {
@@ -147,7 +151,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
           "Content-Type": file.type || "image/jpeg",
           ...authHeaders,
         };
-        const res     = await fetch("/api/upload-asset", { method: "POST", headers: uploadHeaders, body: bytes });
+        const res     = await appFetch("/api/upload-asset", { method: "POST", headers: uploadHeaders, body: bytes });
         const { cdnUrl } = await res.json() as { cdnUrl?: string };
         if (cdnUrl) {
           updateNodeData(id, { r2Url: cdnUrl, inputImage: cdnUrl });
@@ -253,7 +257,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
             baseSrc === (data.r2Url as string | undefined) ? (
               <NextImage
                 ref={nodeImgRef}
-                src={baseSrc}
+                src={appPath(baseSrc)}
                 alt="Input"
                 fill
                 quality={30}
@@ -267,7 +271,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 ref={nodeImgRef}
-                src={baseSrc}
+                src={appPath(baseSrc)}
                 alt="Input"
                 style={{
                   position: "absolute", inset: 0, width: "100%", height: "100%",
@@ -299,7 +303,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
             >
               {topSrc === (data.r2Url as string | undefined) ? (
                 <NextImage
-                  src={topSrc}
+                  src={appPath(topSrc)}
                   alt=""
                   fill
                   quality={30}
@@ -310,7 +314,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={topSrc}
+                  src={appPath(topSrc)}
                   alt=""
                   style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", objectFit: "fill" }}
                   onLoad={() => requestAnimationFrame(() => requestAnimationFrame(() => setTopReady(true)))}
@@ -408,7 +412,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
               {/* Layer 1: full-res image */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={canonicalSrc}
+                src={appPath(canonicalSrc)}
                 alt="Full quality"
                 className="block max-w-[90vw] max-h-[90vh] object-contain"
                 onLoad={() => setLightboxImgLoaded(true)}
@@ -418,7 +422,7 @@ export default function ImageInputNode({ id, data, selected }: NodeProps<ImageIn
               {blurSrc && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={blurSrc}
+                  src={appPath(blurSrc)}
                   alt=""
                   aria-hidden="true"
                   className="absolute inset-0 w-full h-full pointer-events-none"

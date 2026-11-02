@@ -1,3 +1,4 @@
+import { logicalAppPath } from "@/lib/appPaths";
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import { join, normalize } from "node:path";
@@ -10,7 +11,7 @@ import { readManagedMediaAsset } from "@/lib/managedMedia";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const requested = req.nextUrl.searchParams.get("url");
+  const requested = logicalAppPath(req.nextUrl.searchParams.get("url"));
   const filename = (req.nextUrl.searchParams.get("filename") ?? "download").replace(/[\r\n"\\]/g, "_").slice(0, 120);
   if (!requested) return new NextResponse("Missing url", { status: 400 });
   const userId = await resolveUserId(req);

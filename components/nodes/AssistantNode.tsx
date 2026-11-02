@@ -1,4 +1,6 @@
 "use client";
+import { appFetch } from "@/lib/appPaths";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import GenerateButton from "@/components/nodes/GenerateButton";
 import { Handle, Position, NodeProps, Node } from "@xyflow/react";
@@ -139,7 +141,7 @@ export default function AssistantNode({ id, data, selected }: NodeProps<Assistan
 
     try {
       const assistantHeaders: Record<string, string> = { "Content-Type": "application/json" };
-      const res = await fetch("/api/assistant", {
+      const res = await appFetch("/api/assistant", {
         method: "POST",
         headers: assistantHeaders,
         body: JSON.stringify({

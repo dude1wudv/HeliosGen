@@ -1,4 +1,6 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
 import { Handle, Position, NodeProps, Node } from "@xyflow/react";
 import { useWorkflowStore, NodeData } from "@/lib/store";
 import { useRef } from "react";
@@ -112,7 +114,7 @@ export default function VideoGenNode({ id, data }: NodeProps<VideoGenNodeType>) 
         <div className="rounded-lg overflow-hidden bg-gray-800 border border-gray-700 min-h-[120px] flex items-center justify-center">
           {data.videoUrl ? (
             <video
-              src={data.videoUrl}
+              src={appPath(data.videoUrl)}
               controls
               loop
               className="w-full"
@@ -128,7 +130,7 @@ export default function VideoGenNode({ id, data }: NodeProps<VideoGenNodeType>) 
 
         {data.videoUrl && (
           <a
-            href={data.videoUrl}
+            href={appPath(data.videoUrl)}
             target="_blank"
             rel="noreferrer"
             className="block text-center text-xs text-rose-400 hover:text-rose-300"

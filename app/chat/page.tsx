@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 
 import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { flushSync } from "react-dom";
@@ -18,7 +22,7 @@ import { loadAzureBaseUrl, loadAzureTextDeployment, loadAzureTextModelName } fro
 // ── Logo ──────────────────────────────────────────────────────────────────────
 
 function LogoIcon({ size = 40 }: { size?: number }) {
-  return <Image src="/HG.svg" alt="Logo" width={size} height={size} />;
+  return <Image src={appPath("/HG.svg")} alt="Logo" width={size} height={size} />;
 }
 
 // ── Model picker ──────────────────────────────────────────────────────────────
@@ -358,7 +362,7 @@ function ChatWindow({
         azureModelName:  loadAzureTextModelName(),
       } : {};
 
-      const res = await fetch("/api/assistant", {
+      const res = await appFetch("/api/assistant", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import React, { useCallback, useEffect, useRef, useState, Fragment } from "react";
 import { useAnimatedPopup } from "@/lib/useAnimatedPopup";
 import { createPortal } from "react-dom";
@@ -308,7 +312,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
     const filename = `video-${Date.now()}.mp4`;
     setIsSaving(true);
     try {
-      const resp = await fetch(`/api/download?url=${encodeURIComponent(url)}&filename=${filename}`);
+      const resp = await appFetch(`/api/download?url=${encodeURIComponent(url)}&filename=${filename}`);
       const blob = await resp.blob();
       const obj = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -479,7 +483,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
     const taskId = data.taskId as string | undefined;
     if (!taskId || status !== "running") return;
 
-    const es = new EventSource(`/api/job-stream?taskId=${taskId}`);
+    const es = new EventSource(appPath(`/api/job-stream?taskId=${taskId}`));
 
     es.onmessage = (event) => {
       es.close();
@@ -684,7 +688,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       const body = isLastFrame ? { videoUrl: url, lastFrame: true } : { videoUrl: url, timeSeconds: 0 };
-      const r = await fetch("/api/extract-frame", { method: "POST", headers, body: JSON.stringify(body) });
+      const r = await appFetch("/api/extract-frame", { method: "POST", headers, body: JSON.stringify(body) });
       const j = await r.json();
       if (j.cdnUrl) {
         updateNodeData(id, { [isLastFrame ? "eagerEndFrameUrl" : "eagerStartFrameUrl"]: j.cdnUrl });
@@ -741,7 +745,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
       if (!srcUrl) throw new Error("No video source");
 
       const extractHeaders: Record<string, string> = { "Content-Type": "application/json" };
-      const res = await fetch("/api/extract-frame", {
+      const res = await appFetch("/api/extract-frame", {
         method: "POST",
         headers: extractHeaders,
         body: JSON.stringify({ videoUrl: srcUrl, timeSeconds: seekTime }),
@@ -926,7 +930,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
         if (tStart !== undefined && tEnd !== undefined) {
           try {
             const trimHeaders: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` };
-            const trimRes = await fetch("/api/trim-video", {
+            const trimRes = await appFetch("/api/trim-video", {
               method: "POST",
               headers: trimHeaders,
               body: JSON.stringify({ videoUrl: finalVideoRefUrl, startTime: tStart, endTime: tEnd }),
@@ -968,7 +972,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
         const body = isLast
           ? { videoUrl: vUrl, ...(tEnd !== undefined ? { timeSeconds: tEnd } : { lastFrame: true }) }
           : { videoUrl: vUrl, timeSeconds: tStart ?? 0 };
-        const r = await fetch("/api/extract-frame", { method: "POST", headers: frameHeaders, body: JSON.stringify(body) });
+        const r = await appFetch("/api/extract-frame", { method: "POST", headers: frameHeaders, body: JSON.stringify(body) });
         const j = await r.json();
         if (j.cdnUrl) {
           if (fe.targetHandle === "startFrame") finalStartFrameUrl = j.cdnUrl;
@@ -1016,7 +1020,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
       updateNodeData(id, { status: "running", generations: [...prevGens, null] as GenEntry[], generationsMeta: [...prevMeta, thisMeta], currentGenIdx: prevGens.length });
       setLoading(true);
       try {
-        await fetch("/api/generate-video", {
+        await appFetch("/api/generate-video", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
           body: JSON.stringify({ ...payload, debugOnly: true }),
@@ -1046,7 +1050,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
       setLoading(true);
       updateNodeData(id, { status: "running" });
       try {
-        const res = await fetch("/api/generate-video", {
+        const res = await appFetch("/api/generate-video", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
           body: JSON.stringify(payload),
@@ -1351,7 +1355,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
                         if (el) { videoRefs.current.set(i, el); if (i === currentGenIdx) (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el; }
                         else videoRefs.current.delete(i);
                       }}
-                      src={entry}
+                      src={appPath(entry)}
                       className="absolute inset-0 block"
                       style={{ width: "100%", height: "100%", objectFit: "fill" }}
                       loop
@@ -1411,7 +1415,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
           {viewMode === "frame" && displayFrameUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={displayFrameUrl}
+              src={appPath(displayFrameUrl)}
               alt="Captured frame"
               className="absolute inset-0 w-full h-full block"
               style={{ objectFit: "fill", zIndex: 5 }}
@@ -1459,7 +1463,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
                 >
                   <div style={{
                     width: 20, height: 20, borderRadius: "50%",
-                    backgroundImage: `url(${displayFrameUrl})`,
+                    backgroundImage: `url(${appPath(displayFrameUrl)})`,
                     backgroundSize: "cover", backgroundPosition: "center",
                     flexShrink: 0,
                     border: "1px solid rgba(255,255,255,0.15)",
@@ -2047,7 +2051,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
           >
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
-              src={data.videoUrl as string}
+              src={appPath(data.videoUrl as string)}
               controls
               autoPlay
               loop

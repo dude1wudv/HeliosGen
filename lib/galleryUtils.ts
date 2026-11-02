@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { appPath, logicalAppPath } from "./appPaths";
 
 export interface GalleryItem {
   id: string;
@@ -24,7 +25,8 @@ export function thumbSrc(url: string, w = 96): string {
   if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
   const target = w * 2;
   const snapped = NEXT_IMG_WIDTHS.find(s => s >= target) ?? NEXT_IMG_WIDTHS[NEXT_IMG_WIDTHS.length - 1];
-  return `/_next/image?url=${encodeURIComponent(url)}&w=${snapped}&q=75`;
+  if (logicalAppPath(url).startsWith("/api/media/")) return appPath(`/api/thumb?url=${encodeURIComponent(url)}&w=${snapped}`);
+  return appPath(`/_next/image?url=${encodeURIComponent(appPath(url))}&w=${snapped}&q=75`);
 }
 
 export async function getToken(): Promise<string | undefined> {

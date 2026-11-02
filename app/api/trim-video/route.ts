@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadBuffer } from "@/lib/r2";
 import { resolveUserId } from "@/lib/guestMode";
-import { fetchSafeBuffer } from "@/lib/ssrf";
+import { readMediaInput } from "@/lib/mediaInput";
 import { writeFile, readFile, unlink, mkdtemp } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "videoUrl, startTime and endTime are required" }, { status: 400 });
     }
     if (endTime <= startTime) return NextResponse.json({ error: "endTime must be greater than startTime" }, { status: 400 });
-    const fetched = await fetchSafeBuffer(videoUrl, { maxBytes: 100 * 1024 * 1024, timeoutMs: 30_000 });
+    const fetched = await readMediaInput(videoUrl, userId, { maxBytes: 100 * 1024 * 1024, timeoutMs: 30_000 });
     const videoBuffer = fetched.buffer;
     const contentType = fetched.contentType || "video/mp4";
 

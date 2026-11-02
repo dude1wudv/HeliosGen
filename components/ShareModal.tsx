@@ -1,4 +1,6 @@
 "use client";
+import { appFetch, appPath } from "@/lib/appPaths";
+
 import React, { useState, useEffect } from "react";
 import { X, Copy, Check, Globe, Lock } from "lucide-react";
 import { useWorkflowStore } from "@/lib/store";
@@ -20,7 +22,7 @@ export default function ShareModal({ spaceId, open, onClose }: ShareModalProps) 
   const [error, setError] = useState<string | null>(null);
 
   const publicUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/public/workflow/${spaceId}`
+    ? `${window.location.origin}${appPath(`/public/workflow/${spaceId}`)}`
     : `/public/workflow/${spaceId}`;
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export default function ShareModal({ spaceId, open, onClose }: ShareModalProps) 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/spaces/publish", {
+      const res = await appFetch("/api/spaces/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: spaceId, isPublic: !isPublic }),

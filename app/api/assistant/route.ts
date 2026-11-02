@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/appPaths";
 export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
     const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${AZURE_API_VERSION}`;
     console.log("[azure-auto] POST", url.replace(/api-version=.*/, "api-version=…"));
-    const upstream = await fetch(url, {
+    const upstream = await appFetch(url, {
       method: "POST",
       cache: "no-store",
       headers: { "api-key": azureKey, "Content-Type": "application/json" },
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest) {
   const openaiEndpoint = OPENAI_COMPAT_ENDPOINTS[model];
 
   const upstream = openaiEndpoint
-    ? await fetch(openaiEndpoint, {
+    ? await appFetch(openaiEndpoint, {
         method: "POST",
         cache: "no-store",
         headers: {
@@ -139,7 +140,7 @@ export async function POST(req: NextRequest) {
           stream: true,
         }),
       })
-    : await fetch("https://api.kie.ai/claude/v1/messages", {
+    : await appFetch("https://api.kie.ai/claude/v1/messages", {
         method: "POST",
         cache: "no-store",
         headers: {

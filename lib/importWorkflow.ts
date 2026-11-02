@@ -1,3 +1,4 @@
+import { appFetch, appPath, logicalAppPath } from "@/lib/appPaths";
 /**
  * Import a workflow ("space") from a `.zip` produced by `lib/exportWorkflow.ts`:
  *
@@ -96,6 +97,7 @@ function rewrite(value: Json, pathToUrl: Map<string, string>): Json {
   if (typeof value === "string" && value.startsWith(ASSET_PREFIX) && pathToUrl.has(value)) {
     return pathToUrl.get(value)!;
   }
+  if (typeof value === "string" && logicalAppPath(value).startsWith("/api/media/")) return appPath(logicalAppPath(value));
   return value;
 }
 
@@ -148,7 +150,7 @@ export async function importWorkflowZip(file: File): Promise<ImportedWorkflow> {
   for (const entry of entries) {
     if (!entry.name.startsWith(ASSET_PREFIX)) continue;
     try {
-      const res = await fetch("/api/upload-asset", {
+      const res = await appFetch("/api/upload-asset", {
         method: "POST",
         headers: { "Content-Type": contentTypeFromName(entry.name) },
         body: entry.data as BodyInit,

@@ -1,3 +1,4 @@
+import { appPath, logicalAppPath } from "@/lib/appPaths";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { createHash, randomUUID } from "crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -55,7 +56,7 @@ export async function uploadBuffer(
   const hash = hashBuffer(buffer);
   if (MANAGED_MODE && userId) {
     const existing = findMediaAssetByHash(userId, hash);
-    if (existing) return `/api/media/${existing.id}`;
+    if (existing) return appPath(`/api/media/${existing.id}`);
   } else {
     const cached = await lookupAssetHash(hash);
     if (cached) return cached;
@@ -77,7 +78,7 @@ export async function uploadBuffer(
       sha256: hash,
       size_bytes: buffer.byteLength,
     });
-    return `/api/media/${asset.id}`;
+    return appPath(`/api/media/${asset.id}`);
   }
 
   const key = `${folder}/${randomUUID()}.${ext(contentType)}`;
@@ -116,12 +117,13 @@ export async function uploadDataUrl(dataUrl: string, folder: string, userId?: st
 
 /** Resolve any URL to a stored URL (R2 or local disk in guest mode). */
 export async function ensureR2(url: string, folder: string, userId?: string): Promise<string> {
+  url = logicalAppPath(url);
   if (GUEST_MODE) return localStore.ensureStorage(url, folder);
   if (MANAGED_MODE && url.startsWith("/api/media/")) {
     const id = url.slice("/api/media/".length).split(/[?#/]/, 1)[0];
     const asset = id && userId ? getMediaAsset(id, userId) : null;
     if (!asset) throw new Error("Media asset is not available");
-    return `/api/media/${asset.id}`;
+    return appPath(`/api/media/${asset.id}`);
   }
   const cdnBase = process.env.R2_PUBLIC_URL ?? "";
   if (url.startsWith("data:")) return uploadDataUrl(url, folder, userId);

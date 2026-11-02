@@ -1,3 +1,4 @@
+import { APP_BASE_PATH, logicalAppPath } from "@/lib/appPaths";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { GUEST_MODE } from "@/lib/guestMode";
@@ -11,7 +12,7 @@ const ANONYMOUS_MANAGED_PATHS = new Set([
 ]);
 
 function isStaticPath(pathname: string): boolean {
-  return pathname.startsWith("/_next/") || pathname === "/favicon.ico";
+  return pathname.startsWith("/_next/") || ["/favicon.ico", "/HG.svg", "/1.webp", "/2.webp", "/3.webp", "/4.webp", "/legacy-recovery.html"].includes(pathname);
 }
 
 function apiUnauthorized(): NextResponse {
@@ -23,7 +24,7 @@ function apiUnauthorized(): NextResponse {
 
 export async function proxy(request: NextRequest) {
   if (MANAGED_MODE) {
-    const { pathname } = request.nextUrl;
+    const pathname = logicalAppPath(request.nextUrl.pathname);
     if (isStaticPath(pathname) || ANONYMOUS_MANAGED_PATHS.has(pathname) ||
         pathname === "/api/callback" || pathname.startsWith("/api/media/")) {
       return NextResponse.next({ request });
@@ -34,6 +35,7 @@ export async function proxy(request: NextRequest) {
       if (pathname.startsWith("/api/")) return apiUnauthorized();
       const target = request.nextUrl.clone();
       target.pathname = "/bootstrap";
+      target.basePath = APP_BASE_PATH;
       target.search = "?reason=session_expired";
       return NextResponse.redirect(target);
     }

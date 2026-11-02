@@ -1,3 +1,4 @@
+import { logicalAppPath } from "@/lib/appPaths";
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { resolveUserId } from "@/lib/guestMode";
@@ -9,7 +10,7 @@ export const runtime = "nodejs";
 const ALLOWED_WIDTHS = new Set([16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840]);
 
 export async function GET(req: NextRequest) {
-  const urlParam = req.nextUrl.searchParams.get("url");
+  const urlParam = logicalAppPath(req.nextUrl.searchParams.get("url"));
   if (!urlParam) return new NextResponse("Missing url", { status: 400 });
   const userId = await resolveUserId(req);
   if (!userId) return new NextResponse("Unauthorized", { status: 401 });

@@ -1,4 +1,8 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
+import { appFetch } from "@/lib/appPaths";
+
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { IMAGE_MODELS, VIDEO_MODELS } from "@/lib/modelConfig";
 import { MODEL_GROUPS } from "@/lib/models";
@@ -459,7 +463,7 @@ function ApiKeysPanel({
   const handleConnectCodex = async () => {
     setLoginFlow({ status: "starting" });
     try {
-      const res = await fetch("/api/settings/codex-login", { method: "POST" });
+      const res = await appFetch("/api/settings/codex-login", { method: "POST" });
       const d = await res.json();
       if (d.status === "pending") setLoginFlow({ status: "pending", url: d.url, code: d.code });
       else setLoginFlow({ status: "error", error: d.error ?? "Failed to start login" });
@@ -480,7 +484,7 @@ function ApiKeysPanel({
     if (managed || loginFlow.status !== "pending") return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("/api/settings/codex-login");
+        const res = await appFetch("/api/settings/codex-login");
         const d = await res.json();
         if (d.status === "success") {
           setLoginFlow({ status: "idle" });
@@ -492,7 +496,7 @@ function ApiKeysPanel({
           // treat it as success instead of latching an error.
           let recovered = false;
           try {
-            const s = await fetch("/api/settings/codex-status").then((r) => r.json());
+            const s = await appFetch("/api/settings/codex-status").then((r) => r.json());
             if (s.ready || s.authFound) recovered = true;
           } catch { /* fall through to error */ }
           if (recovered) {
@@ -911,7 +915,7 @@ function ApiKeysPanel({
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px" }}>
             <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", margin: 0, lineHeight: 1.6 }}>
               1. Open{" "}
-              <a href={loginFlow.url} target="_blank" rel="noreferrer" style={{ color: "rgba(74,222,128,0.85)" }}>
+              <a href={appPath(loginFlow.url)} target="_blank" rel="noreferrer" style={{ color: "rgba(74,222,128,0.85)" }}>
                 {loginFlow.url}
               </a>
               <br />
@@ -1368,7 +1372,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   }
 
   const refreshCodexStatus = useCallback(() => {
-    fetch("/api/settings/codex-status")
+    appFetch("/api/settings/codex-status")
       .then((r) => r.json())
       .then((d: { ready: boolean; installed: boolean; authFound: boolean }) =>
         setCodexStatus(d.ready ? { kind: "ready" } : { kind: "not_ready", installed: d.installed, authFound: d.authFound })
@@ -1388,14 +1392,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     refreshCodexStatus();
     // Check if Kie key is saved on the server
     authHeader().then((h) =>
-      fetch("/api/settings/kie-key", { headers: h })
+      appFetch("/api/settings/kie-key", { headers: h })
         .then((r) => r.json())
         .then((d) => setKieKeyStatus(d.hasToken ? "set" : "unset"))
         .catch(() => setKieKeyStatus("unset"))
     );
     // Check if Azure key is saved on the server
     authHeader().then((h) =>
-      fetch("/api/settings/azure-key", { headers: h })
+      appFetch("/api/settings/azure-key", { headers: h })
         .then((r) => r.json())
         .then((d) => setAzureKeyStatus(d.hasToken ? "set" : "unset"))
         .catch(() => setAzureKeyStatus("unset"))
@@ -1435,7 +1439,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handleKieKeySave = async (token: string) => {
     const h = await authHeader();
-    const res = await fetch("/api/settings/kie-key", {
+    const res = await appFetch("/api/settings/kie-key", {
       method: "POST",
       headers: { ...h, "Content-Type": "application/json" },
       body: JSON.stringify({ kieApiToken: token }),
@@ -1447,14 +1451,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handleKieKeyDelete = async () => {
     const h = await authHeader();
-    await fetch("/api/settings/kie-key", { method: "DELETE", headers: h });
+    await appFetch("/api/settings/kie-key", { method: "DELETE", headers: h });
     setKieKeyStatus("unset");
     setKieKeySet(false);
   };
 
   const handleAzureKeySave = async (key: string) => {
     const h = await authHeader();
-    const res = await fetch("/api/settings/azure-key", {
+    const res = await appFetch("/api/settings/azure-key", {
       method: "POST",
       headers: { ...h, "Content-Type": "application/json" },
       body: JSON.stringify({ azureApiKey: key }),
@@ -1466,7 +1470,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handleAzureKeyDelete = async () => {
     const h = await authHeader();
-    await fetch("/api/settings/azure-key", { method: "DELETE", headers: h });
+    await appFetch("/api/settings/azure-key", { method: "DELETE", headers: h });
     setAzureKeyStatus("unset");
     setAzureKeySet(false);
   };

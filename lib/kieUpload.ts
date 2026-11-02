@@ -1,3 +1,5 @@
+import { logicalAppPath } from "@/lib/appPaths";
+import { appFetch } from "@/lib/appPaths";
 /**
  * Make image inputs reachable by kie.ai from a machine with no public URL.
  *
@@ -45,10 +47,12 @@ const MIME_BY_EXT: Record<string, string> = {
 
 /** A local reference that kie.ai can't fetch and we must re-host. */
 function isLocalMedia(url: string): boolean {
+  url = logicalAppPath(url);
   return url.startsWith("data:") || url.startsWith("/generated/") || url.startsWith("/api/media/");
 }
 
 async function toDataUrl(input: string, userId?: string): Promise<string> {
+  input = logicalAppPath(input);
   if (input.startsWith("data:")) return input;
   if (input.startsWith("/api/media/")) {
     const id = input.slice("/api/media/".length).split(/[?#/]/, 1)[0];
@@ -75,7 +79,7 @@ const uploadCache = new Map<string, Promise<string>>();
 
 async function doUpload(input: string, apiKey: string, userId?: string): Promise<string> {
   const base64Data = await toDataUrl(input, userId);
-  const res = await fetch(UPLOAD_URL, {
+  const res = await appFetch(UPLOAD_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ base64Data, uploadPath: "heliosgen" }),
@@ -101,6 +105,7 @@ function uploadOne(input: string, apiKey: string, userId?: string): Promise<stri
  * short-lived kie.ai temporary URL.
  */
 async function makeReachable(input: string, apiKey: string, userId?: string): Promise<string> {
+  input = logicalAppPath(input);
   if (MANAGED_MODE && input.startsWith("/generated/")) {
     throw new Error("Legacy generated media is not available in managed mode");
   }

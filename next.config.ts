@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { NextConfig } from "next";
+import { normalizeAppBasePath } from "./lib/appPaths";
 
 // The packaged desktop (Tauri) build runs `next build` with DESKTOP_BUILD=1 and
 // ships the self-contained `.next/standalone` server as a bundled sidecar. Plain
@@ -8,6 +9,7 @@ const DESKTOP_BUILD = process.env.DESKTOP_BUILD === "1";
 const STANDALONE_BUILD = DESKTOP_BUILD || process.env.SUB2API_MANAGED_MODE === "true";
 
 const nextConfig: NextConfig = {
+  basePath: DESKTOP_BUILD ? "" : normalizeAppBasePath(process.env.NEXT_PUBLIC_APP_BASE_PATH),
   allowedDevOrigins: ["192.168.64.2"],
   ...(STANDALONE_BUILD ? { output: "standalone" as const } : {}),
   turbopack: {
@@ -27,6 +29,9 @@ const nextConfig: NextConfig = {
     "/**": ["src-tauri/**/*"],
   },
   images: {
+    // Managed images require the browser session. Next's optimizer must not
+    // fetch them anonymously; authenticated thumbnails use /api/thumb instead.
+    unoptimized: process.env.SUB2API_MANAGED_MODE === "true" || process.env.NEXT_PUBLIC_SUB2API_MANAGED_MODE === "true",
     remotePatterns: [
       // Read-only public bucket holding the bundled workflow-template sample media
       // (lib/templates.ts). Not app storage — just an image CDN allow-list entry.

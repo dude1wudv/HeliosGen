@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadBuffer } from "@/lib/r2";
 import { resolveUserId } from "@/lib/guestMode";
-import { fetchSafeBuffer } from "@/lib/ssrf";
+import { readMediaInput } from "@/lib/mediaInput";
 import { writeFile, readFile, unlink, mkdtemp } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const userId = await resolveUserId(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!videoUrl) return NextResponse.json({ error: "videoUrl is required" }, { status: 400 });
-    const fetched = await fetchSafeBuffer(videoUrl, { maxBytes: 100 * 1024 * 1024, timeoutMs: 30_000 });
+    const fetched = await readMediaInput(videoUrl, userId, { maxBytes: 100 * 1024 * 1024, timeoutMs: 30_000 });
     const videoBuffer = fetched.buffer;
     const tmpDir  = await mkdtemp(join(tmpdir(), "frame-"));
     inputPath  = join(tmpDir, "input.mp4");

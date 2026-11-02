@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/appPaths";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -43,7 +44,7 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
     "Content-Type": "application/json",
     ...(options.headers ?? {}),
   };
-  return fetch(url, { ...options, headers });
+  return appFetch(url, { ...options, headers });
 }
 
 export const useFolderStore = create<FolderState>()(

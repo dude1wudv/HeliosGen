@@ -1,4 +1,6 @@
 "use client";
+import { appPath } from "@/lib/appPaths";
+
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -109,7 +111,7 @@ export default function AuthModal() {
 
     if (mode === "forgot") {
       const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}${appPath("/")}`,
       });
       setBusy(false);
       if (err) { setError(err.message); return; }
@@ -136,7 +138,7 @@ export default function AuthModal() {
     setError("");
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/api/auth/callback` },
+      options: { redirectTo: `${window.location.origin}${appPath("/api/auth/callback")}` },
     });
     if (err) { setError(err.message); setGoogleBusy(false); }
   };
@@ -171,7 +173,7 @@ export default function AuthModal() {
         }}>
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Image src="/HG.svg" alt="HeliosGen" width={32} height={32} />
+            <Image src={appPath("/HG.svg")} alt="HeliosGen" width={32} height={32} />
             <span style={{ fontSize: "17px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
               HeliosGen
             </span>
@@ -278,7 +280,7 @@ export default function AuthModal() {
         }}>
           {/* Full-size static image */}
           <img
-            src="/1.webp"
+            src={appPath("/1.webp")}
             alt=""
             style={{
               position: "absolute", inset: 0,
@@ -300,7 +302,7 @@ export default function AuthModal() {
             padding: "24px",
             display: "flex", alignItems: "center", gap: "10px",
           }}>
-            <Image src="/HG.svg" alt="HeliosGen" width={28} height={28} />
+            <Image src={appPath("/HG.svg")} alt="HeliosGen" width={28} height={28} />
             <span style={{
               fontSize: "15px", fontWeight: 600, color: "#fff",
               letterSpacing: "-0.01em", textShadow: "0 1px 4px rgba(0,0,0,0.6)",

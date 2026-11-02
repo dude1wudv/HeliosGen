@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/appPaths";
 import { NextRequest, NextResponse } from "next/server";
 import { HELIOS_PUBLIC_ORIGIN, MANAGED_MODE } from "@/lib/managedMode";
 import { setSessionCookie } from "@/lib/sub2api/session";
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const upstream = await fetch(`${baseUrl}/workbenches/helios/token`, {
+    const upstream = await appFetch(`${baseUrl}/workbenches/helios/token`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`, "utf8").toString("base64")}`,

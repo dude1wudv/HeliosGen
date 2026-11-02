@@ -1,4 +1,6 @@
 "use client";
+import { appFetch } from "@/lib/appPaths";
+
 import { useEffect } from "react";
 
 /**
@@ -19,7 +21,7 @@ export default function DesktopLinkHandler() {
     };
 
     const openExternal = (url: string) => {
-      fetch("/api/open-external", {
+      appFetch("/api/open-external", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
