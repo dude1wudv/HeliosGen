@@ -22,10 +22,32 @@ export function getSpaces(userId: string): GuestSpace[] {
   }).filter((space): space is GuestSpace => space !== null);
 }
 
-export function saveSpaces(userId: string, spaces: GuestSpace[]): void {
+function getRevision(userId: string): number {
+  const row = db().prepare("SELECT revision FROM workflow_revisions WHERE user_id = ?").get(userId) as { revision: number } | undefined;
+  return row?.revision ?? 0;
+}
+
+export function getSpacesSnapshot(userId: string): { spaces: GuestSpace[]; revision: number } {
   const database = db();
   database.exec("BEGIN");
   try {
+    const snapshot = { revision: getRevision(userId), spaces: getSpaces(userId) };
+    database.exec("COMMIT");
+    return snapshot;
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+export class WorkflowRevisionConflict extends Error {}
+
+export function saveSpaces(userId: string, spaces: GuestSpace[], expectedRevision?: number): number {
+  const database = db();
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const revision = getRevision(userId);
+    if (expectedRevision !== undefined && revision !== expectedRevision) throw new WorkflowRevisionConflict("Workflows have changed");
     const keep = new Set(spaces.map((space) => space.id));
     const upsert = database.prepare(`
       INSERT INTO spaces (id, user_id, name, data, updated_at) VALUES (?, ?, ?, ?, ?)
@@ -37,7 +59,11 @@ export function saveSpaces(userId: string, spaces: GuestSpace[]): void {
     const existing = database.prepare("SELECT id FROM spaces WHERE user_id = ?").all(userId) as { id: string }[];
     const remove = database.prepare("DELETE FROM spaces WHERE user_id = ? AND id = ?");
     for (const { id } of existing) if (!keep.has(id)) remove.run(userId, id);
+    const nextRevision = revision + 1;
+    database.prepare("INSERT INTO workflow_revisions (user_id, revision) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET revision = excluded.revision")
+      .run(userId, nextRevision);
     database.exec("COMMIT");
+    return nextRevision;
   } catch (error) {
     database.exec("ROLLBACK");
     throw error;

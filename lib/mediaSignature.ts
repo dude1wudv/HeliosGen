@@ -1,5 +1,5 @@
 import { appPath } from "@/lib/appPaths";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const SIGNATURE_TTL_SECONDS = 15 * 60;
 
@@ -37,23 +37,29 @@ export function verifyMediaSignature(assetId: string, userId: string, expiresVal
   }
 }
 
-function callbackDigest(expires: number): Buffer {
-  return createHmac("sha256", signingKey()).update(`callback.${expires}`).digest();
+export function createKieCallbackNonce(): string {
+  return randomBytes(32).toString("base64url");
 }
 
-export function createKieCallbackUrl(origin: string): string {
+function callbackDigest(expires: number, nonce: string): Buffer {
+  return createHmac("sha256", signingKey()).update(`callback.${expires}.${nonce}`).digest();
+}
+
+export function createKieCallbackUrl(origin: string, nonce: string): string {
   const expires = Math.floor(Date.now() / 1000) + SIGNATURE_TTL_SECONDS;
   const url = new URL(appPath("/api/callback"), origin);
+  url.searchParams.set("nonce", nonce);
   url.searchParams.set("expires", String(expires));
-  url.searchParams.set("sig", callbackDigest(expires).toString("base64url"));
+  url.searchParams.set("sig", callbackDigest(expires, nonce).toString("base64url"));
   return url.toString();
 }
 
-export function verifyKieCallbackSignature(expiresValue: string | null, signatureValue: string | null): boolean {
+export function verifyKieCallbackSignature(expiresValue: string | null, nonce: string | null, signatureValue: string | null): boolean {
   const expires = Number(expiresValue);
-  if (!Number.isSafeInteger(expires) || expires < Math.floor(Date.now() / 1000) || !signatureValue) return false;
+  if (!Number.isSafeInteger(expires) || expires < Math.floor(Date.now() / 1000) ||
+    !nonce || !/^[A-Za-z0-9_-]{43}$/.test(nonce) || !signatureValue) return false;
   try {
-    const expected = callbackDigest(expires);
+    const expected = callbackDigest(expires, nonce);
     const supplied = Buffer.from(signatureValue, "base64url");
     return supplied.byteLength === expected.byteLength && timingSafeEqual(supplied, expected);
   } catch {

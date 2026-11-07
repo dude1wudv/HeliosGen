@@ -175,6 +175,7 @@ interface WorkflowStore {
 
   // ── Spaces
   spaces:        Space[];
+  workflowOwnerId: string | null;
   activeSpaceId: string;
 
   // ── Live state (mirrors the active space; kept in sync on every mutation)
@@ -253,6 +254,7 @@ export const useWorkflowStore = create<WorkflowStore>()(
 
       return {
         spaces:        [defaultSpace],
+        workflowOwnerId: null,
         activeSpaceId: defaultSpace.id,
 
         nodes:        [],
@@ -698,6 +700,7 @@ export const useWorkflowStore = create<WorkflowStore>()(
         clearLocalData: () => {
           const fresh = makeSpace("Space 1");
           set({
+            workflowOwnerId: null,
             spaces:        [fresh],
             activeSpaceId: fresh.id,
             nodes:         [],
@@ -745,6 +748,7 @@ export const useWorkflowStore = create<WorkflowStore>()(
       name: process.env.NEXT_PUBLIC_GUEST_MODE === "true" ? "heliosgen-guest" : "heliosgen",
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
+        workflowOwnerId: s.workflowOwnerId,
         spaces: s.spaces.map((sp) => ({
           ...sp,
           viewport: sp.viewport,

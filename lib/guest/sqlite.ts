@@ -68,6 +68,9 @@ function createSchema(d: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS spaces (
       id TEXT PRIMARY KEY, name TEXT, data TEXT, updated_at INTEGER
     );
+    CREATE TABLE IF NOT EXISTS workflow_revisions (
+      user_id TEXT PRIMARY KEY, revision INTEGER NOT NULL DEFAULT 0
+    );
 
     CREATE TABLE IF NOT EXISTS media_assets (
       id TEXT PRIMARY KEY,

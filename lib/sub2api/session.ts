@@ -100,7 +100,12 @@ export function readSession(request: NextRequest | Request): Sub2ApiSession | nu
   const prefix = `${SESSION_COOKIE}=`;
   const pair = (request.headers.get("cookie") ?? "").split(";").find((part) => part.trimStart().startsWith(prefix));
   const value = pair?.trimStart().slice(prefix.length);
-  return openSession(value ? decodeURIComponent(value) : null);
+  try {
+    return openSession(value ? decodeURIComponent(value) : null);
+  } catch {
+    // A malformed client Cookie is unauthenticated, not a server error.
+    return null;
+  }
 }
 
 function secureCookie(): boolean {

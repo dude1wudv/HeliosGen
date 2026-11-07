@@ -8,13 +8,13 @@ import { useSpaceSync } from "@/lib/useSpaceSync";
 import { importWorkflowZip } from "@/lib/importWorkflow";
 
 export default function RecoverWorkflows() {
-  useSpaceSync();
+  const { loaded, loadError, retryLoad, recoveryBackup } = useSpaceSync();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   async function importFile(file?: File) {
-    if (!file || busy) return;
+    if (!file || busy || !loaded) return;
     setBusy(true);
     setMessage("");
     try {
@@ -41,8 +41,15 @@ export default function RecoverWorkflows() {
   return <main className="mx-auto w-full max-w-2xl overflow-auto p-6 md:p-10">
     <h1 className="text-2xl font-semibold">恢复旧画布工作流</h1>
     <p className="my-5 text-sm leading-6 text-white/70">在旧域恢复页导出本地工作流后，在这里导入。每个工作流都会创建独立副本，不覆盖已有内容；媒体仍按当前账户验证访问权限。</p>
+    {loadError ? <p role="alert" className="my-4 text-sm">{loadError} <button className="underline" onClick={retryLoad}>重试加载</button></p>
+      : !loaded && <p role="status" className="my-4 text-sm">正在读取当前账户工作流，完成前暂停导入与自动保存…</p>}
+    {recoveryBackup && <p className="my-4 text-sm">发现未确认归属的本机工作流，已单独保留，未自动合并到当前账户。<button className="ml-2 underline" onClick={() => {
+      const url = URL.createObjectURL(new Blob([recoveryBackup], { type: "application/json" }));
+      const link = document.createElement("a"); link.href = url; link.download = "helios-unclaimed-workflows.json"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }}>导出本机恢复文件</button></p>}
     <label className="block rounded-xl border border-white/20 p-5">选择恢复文件（JSON）或完整工作流（ZIP）
-      <input ref={input} className="mt-4 block w-full text-sm" type="file" accept=".json,.zip,application/json,application/zip" disabled={busy} onChange={(event) => { void importFile(event.target.files?.[0]); }} />
+      <input ref={input} className="mt-4 block w-full text-sm" type="file" accept=".json,.zip,application/json,application/zip" disabled={busy || !loaded} onChange={(event) => { void importFile(event.target.files?.[0]); }} />
     </label>
     {busy && <p role="status" className="mt-4">正在导入副本…</p>}
     {message && <p role="status" className="mt-4 rounded-xl border border-white/20 p-4 text-sm">{message}</p>}

@@ -9,7 +9,7 @@ import { VIDEO_MODELS } from "@/lib/modelConfig";
 import { getKieTokenForUser } from "@/lib/getKieToken";
 import { GUEST_MODE, resolveUserId } from "@/lib/guestMode";
 import { HELIOS_PUBLIC_ORIGIN, MANAGED_MODE } from "@/lib/managedMode";
-import { createKieCallbackUrl } from "@/lib/mediaSignature";
+import { createKieCallbackNonce, createKieCallbackUrl } from "@/lib/mediaSignature";
 import * as guestDb from "@/lib/guest/db";
 
 const KIE_BASE = "https://api.kie.ai";
@@ -58,8 +58,9 @@ export async function POST(req: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: "No Kie.ai API key configured. Add one in Settings." }, { status: 401 });
 
   const callbackBase = process.env.CALLBACK_BASE_URL;
-  const callBackUrl = MANAGED_MODE
-    ? createKieCallbackUrl(HELIOS_PUBLIC_ORIGIN)
+  const callbackNonce = MANAGED_MODE ? createKieCallbackNonce() : undefined;
+  const callBackUrl = callbackNonce
+    ? createKieCallbackUrl(HELIOS_PUBLIC_ORIGIN, callbackNonce)
     : rawCallBackUrl || (callbackBase ? `${callbackBase.replace(/\/$/, "")}/api/callback` : undefined);
   // Guest/desktop mode polls kie.ai directly (lib/kieJobPoller) — no callback URL needed.
   if (!callBackUrl && !GUEST_MODE) {
@@ -408,7 +409,7 @@ export async function POST(req: NextRequest) {
   const taskId = created.data?.taskId || created.data?.id;
   if (!taskId) return NextResponse.json({ error: "No taskId returned" }, { status: 500 });
 
-  jobStore.set(taskId, { status: "pending", type: "video", userId });
+  jobStore.set(taskId, { status: "pending", type: "video", userId, callbackNonce });
   // Save to Supabase (fire-and-forget)
 
   const referenceUrls: string[] = apiInput.useMotionControl

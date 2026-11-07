@@ -78,6 +78,20 @@ const space = (id: string, name: string) => ({
 });
 
 describe("owner-scoped settings and spaces", () => {
+  it("rejects missing and stale same-owner revisions without deleting another tab's saved data", async () => {
+    const user = "two-tabs-user";
+    const first = await (await spacesRoute.GET(request("/api/guest-spaces", user))).json();
+    const second = await (await spacesRoute.GET(request("/api/guest-spaces", user))).json();
+    const saved = [space("newly-saved", "Do not delete")];
+    const put = (expectedRevision?: number, spaces = saved) => spacesRoute.PUT(request("/api/guest-spaces", user, {
+      method: "PUT", body: JSON.stringify({ expectedUserId: user, expectedRevision, spaces }),
+    }));
+    expect(await (await put(first.revision)).json()).toEqual({ ok: true, revision: 1 });
+    expect((await put(second.revision, [])).status).toBe(409);
+    expect((await put(undefined, [])).status).toBe(409);
+    expect(await (await spacesRoute.GET(request("/api/guest-spaces", user))).json()).toEqual({ userId: user, revision: 1, spaces: saved });
+  });
+
   it("keeps Kie and Azure settings isolated across users", async () => {
     const userA = "settings-user-a";
     const userB = "settings-user-b";
@@ -113,19 +127,29 @@ describe("owner-scoped settings and spaces", () => {
     const sharedId = "shared-space-id";
 
     expect((await (await spacesRoute.PUT(request("/api/guest-spaces", userA, {
-      method: "PUT", body: JSON.stringify({ spaces: [space(sharedId, "owned-by-a")] }),
-    }))).json())).toEqual({ ok: true });
-    expect(await (await spacesRoute.GET(request("/api/guest-spaces", userB))).json()).toEqual({ spaces: [] });
+      method: "PUT", body: JSON.stringify({ expectedUserId: userA, expectedRevision: 0, spaces: [space(sharedId, "owned-by-a")] }),
+    }))).json())).toEqual({ ok: true, revision: 1 });
+    expect(await (await spacesRoute.GET(request("/api/guest-spaces", userB))).json()).toEqual({ userId: userB, revision: 0, spaces: [] });
 
     await spacesRoute.PUT(request("/api/guest-spaces", userB, {
+      method: "PUT", body: JSON.stringify({ expectedUserId: userB, expectedRevision: 0, spaces: [] }),
+    }));
+    expect(await (await spacesRoute.GET(request("/api/guest-spaces", userA))).json()).toEqual({ userId: userA, revision: 1, spaces: [space(sharedId, "owned-by-a")] });
+
+    await spacesRoute.PUT(request("/api/guest-spaces", userB, {
+      method: "PUT", body: JSON.stringify({ expectedUserId: userB, expectedRevision: 1, spaces: [space(sharedId, "owned-by-b")] }),
+    }));
+    expect(await (await spacesRoute.GET(request("/api/guest-spaces", userA))).json()).toEqual({ userId: userA, revision: 1, spaces: [space(sharedId, "owned-by-a")] });
+    // A mounted page for A must not replace B's list after a cookie/account switch.
+    const stale = await spacesRoute.PUT(request("/api/guest-spaces", userB, {
+      method: "PUT", body: JSON.stringify({ expectedUserId: userA, spaces: [] }),
+    }));
+    expect(stale.status).toBe(409);
+    const missingOwner = await spacesRoute.PUT(request("/api/guest-spaces", userB, {
       method: "PUT", body: JSON.stringify({ spaces: [] }),
     }));
-    expect(await (await spacesRoute.GET(request("/api/guest-spaces", userA))).json()).toEqual({ spaces: [space(sharedId, "owned-by-a")] });
-
-    await spacesRoute.PUT(request("/api/guest-spaces", userB, {
-      method: "PUT", body: JSON.stringify({ spaces: [space(sharedId, "owned-by-b")] }),
-    }));
-    expect(await (await spacesRoute.GET(request("/api/guest-spaces", userA))).json()).toEqual({ spaces: [space(sharedId, "owned-by-a")] });
+    expect(missingOwner.status).toBe(409);
+    expect(await (await spacesRoute.GET(request("/api/guest-spaces", userB))).json()).toEqual({ userId: userB, revision: 2, spaces: [space(sharedId, "owned-by-b")] });
   });
 });
 

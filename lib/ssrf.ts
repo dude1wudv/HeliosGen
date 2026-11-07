@@ -36,9 +36,38 @@ function blockedIpv6(address: string): boolean {
       normalized.startsWith("fc") || normalized.startsWith("fd") ||
       normalized.startsWith("fe8") || normalized.startsWith("fe9") ||
       normalized.startsWith("fea") || normalized.startsWith("feb") ||
-      normalized.startsWith("2001:db8")) return true;
-  const mapped = normalized.match(/^(?:0:){0,4}:?ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  return mapped ? blockedIpv4(mapped[1]) : false;
+      normalized.startsWith("2001:db8") || normalized.startsWith("2002:") ||
+      normalized.startsWith("64:ff9b:")) return true;
+  const words = ipv6Words(normalized);
+  if (!words) return true;
+  // OS networking treats IPv4-mapped IPv6 as the embedded IPv4 destination.
+  // Check the 128-bit form too; DNS commonly returns ::ffff:7f00:1 rather than
+  // the dotted ::ffff:127.0.0.1 spelling.
+  const mapped = words.slice(0, 5).every((word) => word === 0) && words[5] === 0xffff;
+  const compatible = words.slice(0, 6).every((word) => word === 0);
+  if (!mapped && !compatible) return false;
+  const octets = [words[6] >>> 8, words[6] & 0xff, words[7] >>> 8, words[7] & 0xff];
+  return blockedIpv4(octets.join("."));
+}
+
+function ipv6Words(address: string): number[] | null {
+  let value = address;
+  if (value.includes(".")) {
+    const split = value.lastIndexOf(":");
+    if (split < 0) return null;
+    const octets = value.slice(split + 1).split(".").map(Number);
+    if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+    value = `${value.slice(0, split)}:${((octets[0] << 8) | octets[1]).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
+  }
+  const halves = value.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const raw = halves.length === 2
+    ? [...left, ...Array(8 - left.length - right.length).fill("0"), ...right]
+    : left;
+  if (raw.length !== 8 || raw.some((word) => !/^[0-9a-f]{1,4}$/.test(word))) return null;
+  return raw.map((word) => Number.parseInt(word, 16));
 }
 
 function blockedAddress(address: string): boolean {

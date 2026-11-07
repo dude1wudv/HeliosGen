@@ -18,7 +18,7 @@ import { GUEST_MODE, resolveUserId } from "@/lib/guestMode";
 import { HELIOS_PUBLIC_ORIGIN, MANAGED_MODE } from "@/lib/managedMode";
 import { readSession } from "@/lib/sub2api/session";
 import { generateSub2ApiImage } from "@/lib/sub2api/images";
-import { createKieCallbackUrl } from "@/lib/mediaSignature";
+import { createKieCallbackNonce, createKieCallbackUrl } from "@/lib/mediaSignature";
 import { fetchSafeBuffer } from "@/lib/ssrf";
 import { readManagedMediaAsset } from "@/lib/managedMedia";
 import * as guestDb from "@/lib/guest/db";
@@ -585,8 +585,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "CALLBACK_BASE_URL is not set" }, { status: 500 });
   }
 
-  const callBackUrl = MANAGED_MODE
-    ? createKieCallbackUrl(HELIOS_PUBLIC_ORIGIN)
+  const callbackNonce = MANAGED_MODE ? createKieCallbackNonce() : undefined;
+  const callBackUrl = callbackNonce
+    ? createKieCallbackUrl(HELIOS_PUBLIC_ORIGIN, callbackNonce)
     : callbackBase ? `${callbackBase.replace(/\/$/, "")}/api/callback` : undefined;
 
   try {
@@ -634,7 +635,7 @@ export async function POST(req: NextRequest) {
     const taskId = d.data?.taskId ?? d.data?.id ?? d.taskId ?? d.id;
     if (!taskId) throw new Error("No task ID in response");
 
-    jobStore.set(taskId, { status: "pending", type: "image", userId: currentUserId });
+    jobStore.set(taskId, { status: "pending", type: "image", userId: currentUserId, callbackNonce });
 
     if (GUEST_MODE || MANAGED_MODE) {
       guestDb.insertGeneration({

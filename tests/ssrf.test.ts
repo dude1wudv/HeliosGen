@@ -13,6 +13,17 @@ describe("shared SSRF policy", () => {
     await expect(assertSafeUrl("ftp://example.com/image.png")).rejects.toThrow("HTTP(S)");
   });
 
+  it.each([
+    ["::ffff:127.0.0.1", "loopback"],
+    ["::ffff:7f00:1", "hexadecimal IPv4-mapped loopback"],
+    ["::ffff:a00:1", "hexadecimal IPv4-mapped private network"],
+    ["::ffff:169.254.169.254", "dotted metadata address"],
+  ])("rejects DNS answers containing %s (%s)", async (address) => {
+    const lookup = vi.spyOn(dns, "lookup").mockResolvedValue([{ address, family: 6 }] as never);
+    await expect(assertSafeUrl("https://mapped.example/image")).rejects.toThrow("private");
+    lookup.mockRestore();
+  });
+
   it("re-resolves every redirect and rejects DNS rebinding to a private address", async () => {
     const lookup = vi.spyOn(dns, "lookup");
     lookup

@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from "
 import { join } from "path";
 import { DATA_DIR } from "./guest/paths";
 
-export type PendingJobResult = { status: "pending"; type?: "image" | "video"; userId: string };
+export type PendingJobResult = { status: "pending"; type?: "image" | "video"; userId: string; callbackNonce?: string };
 export type SettledJobResult =
   | { status: "done"; imageUrl?: string; imageUrls?: string[]; videoUrl?: string; userId: string }
   | { status: "error"; error: string; userId: string };

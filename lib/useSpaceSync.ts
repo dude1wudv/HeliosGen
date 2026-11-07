@@ -1,10 +1,10 @@
 "use client";
-import { appFetch } from "@/lib/appPaths";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkflowStore, Space } from "./store";
 import { createClient } from "./supabase/client";
 import { SYNC_NOW_EVENT, requestWorkflowSync } from "./workflowSyncBus";
+import { promoteActiveDraft, reconcileWorkflowOwner, WorkflowSyncSession } from "./workflowSyncSession";
 
 const DEBOUNCE_MS  = 1_500; // continuous edits (drag frames, typing): coalesce
 const IMMEDIATE_MS = 250;   // discrete edits (add/delete/connect/resize-end): near-instant, still coalesces a burst
@@ -22,6 +22,13 @@ export function useSpaceSync() {
 
   const [status,       setStatus]       = useState<SyncStatus>("idle");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [recoveryBackup, setRecoveryBackup] = useState("");
+  const localSession = useRef(new WorkflowSyncSession());
+  const loadedRef = useRef(false);
+  const retryLoad = useCallback(() => setLoadAttempt((attempt) => attempt + 1), []);
   // Block all Supabase writes until localStorage has fully rehydrated.
   // In Zustand v5, persist rehydration is async — if we save before it
   // completes, we'd write the default empty state and delete all real spaces.
@@ -57,27 +64,47 @@ export function useSpaceSync() {
   // ── Load from DB on mount (after hydration) ──────────────────────────────────
   useEffect(() => {
     if (!hydrated) return;
+    const syncSession = localSession.current;
+    let cancelled = false;
+    loadedRef.current = false;
     (async () => {
+      setLoaded(false);
+      setLoadError("");
       if (LOCAL_DB) {
         try {
-          const res = await appFetch("/api/guest-spaces");
-          if (!res.ok) return;
-          const { spaces: dbSpaces } = (await res.json()) as { spaces: Space[] };
-          if (!dbSpaces?.length) return;
-          loadSpacesFromDB(dbSpaces);
+          const success = await syncSession.load((owner, dbSpaces) => {
+            const current = useWorkflowStore.getState();
+            if (MANAGED) {
+              setRecoveryBackup(reconcileWorkflowOwner(owner, current, window.localStorage, () => {
+                current.clearLocalData();
+                useWorkflowStore.setState({ workflowOwnerId: owner });
+              }));
+            }
+            const mergedCurrent = useWorkflowStore.getState();
+            const draftSafeSpaces = promoteActiveDraft(mergedCurrent);
+            if (draftSafeSpaces.some((space, index) => space !== mergedCurrent.spaces[index])) {
+              useWorkflowStore.setState({ spaces: draftSafeSpaces });
+            }
+            loadSpacesFromDB(dbSpaces);
+          });
+          if (!success || cancelled) return;
+          loadedRef.current = true;
+          setLoaded(true);
           const now = new Date();
           lastSyncedRef.current = now.getTime();
           setLastSyncedAt(now);
           setStatus("synced");
-        } catch {
-          /* keep local state */
+        } catch (error) {
+          if (cancelled) return;
+          setLoadError(error instanceof Error ? error.message : "无法读取服务器工作流，请重试。");
+          setStatus("error");
         }
         return;
       }
 
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) { setLoadError("请登录后重新加载工作流。"); return; }
 
       const { data, error } = await supabase
         .from("spaces")
@@ -85,8 +112,8 @@ export function useSpaceSync() {
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: true });
 
-      console.log("[SpaceSync] DB load:", { error, rows: data?.length, data, session: session.user.id });
-      if (error || !data?.length) return;
+      if (cancelled) return;
+      if (error || !data) { setLoadError("无法读取服务器工作流，请重试。"); setStatus("error"); return; }
 
       const dbSpaces: Space[] = data.map((row) => ({
         id:           row.id,
@@ -101,42 +128,53 @@ export function useSpaceSync() {
       }));
 
       loadSpacesFromDB(dbSpaces);
+      loadedRef.current = true;
+      setLoaded(true);
       const now = new Date();
       lastSyncedRef.current = now.getTime();
       setLastSyncedAt(now);
       setStatus("synced");
-    })();
+    })().catch(() => { if (!cancelled) { setLoadError("无法读取服务器工作流，请重试。"); setStatus("error"); } });
+    return () => {
+      cancelled = true;
+      loadedRef.current = false;
+      syncSession.cancel();
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]); // run once after hydration
+  }, [hydrated, loadAttempt]);
 
   // ── Core save (no rate-limit checks) ────────────────────────────────────────
   // `keepalive` lets the request outlive the page during an unload/pagehide
   // flush (capped at ~64KB of body by the browser — fine for the stripped
   // spaces payload; a normal fetch is used for the regular debounced path).
   const save = useCallback(async ({ keepalive = false }: { keepalive?: boolean } = {}) => {
+    if (!loadedRef.current) return;
     if (LOCAL_DB) {
       setStatus("syncing");
       try {
-        const spacesToSave = useWorkflowStore.getState().spaces.filter((sp) => sp.nodes.length > 0);
-        const res = await appFetch("/api/guest-spaces", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          keepalive,
-          body: JSON.stringify({
-            spaces: spacesToSave.map((sp) => ({
+        const sourceSpaces = useWorkflowStore.getState().spaces;
+        const spacesToSave = sourceSpaces.filter((sp) => sp.nodes.length > 0);
+        const saved = await localSession.current.save(
+            spacesToSave.map((sp) => ({
               ...sp,
               nodes: sp.nodes.map((n) => ({ ...n, data: { ...n.data, inputImage: undefined } })),
-            })),
-          }),
-        });
-        if (!res.ok) throw new Error(String(res.status));
+            })), keepalive);
+        if (!saved) return;
         const now = new Date();
         lastSyncedRef.current = now.getTime();
         setLastSyncedAt(now);
         setStatus("synced");
-        dirtyRef.current = false;
-        immediateRef.current = false;
-      } catch {
+        // An edit may arrive while this snapshot is in flight. Preserve its
+        // pending flush instead of marking newer changes as already saved.
+        dirtyRef.current = useWorkflowStore.getState().spaces !== sourceSpaces;
+        if (!dirtyRef.current) immediateRef.current = false;
+      } catch (error) {
+        if (!localSession.current?.ready) {
+          loadedRef.current = false;
+          setLoaded(false);
+          setLoadError(error instanceof Error ? error.message : "请重新加载工作流。");
+        }
         dirtyRef.current = true;
         setStatus("error");
       }
@@ -236,7 +274,7 @@ export function useSpaceSync() {
   }, [save]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !loaded) return;
     const previous = previousSpacesRef.current;
     const current = new Map(spaces.map((space) => [space.id, space]));
     for (const space of spaces) {
@@ -255,7 +293,7 @@ export function useSpaceSync() {
     dirtyRef.current = true;
     syncDebounced();
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [spaces, syncDebounced, hydrated]);
+  }, [spaces, syncDebounced, hydrated, loaded]);
 
   // ── Flush a pending edit early instead of waiting out the debounce ──────────
   //  • discrete edits (requestWorkflowSync): drop/delete a node, finish a
@@ -264,7 +302,7 @@ export function useSpaceSync() {
   //    `pagehide` fires on reload, navigation and tab/app close; a hidden
   //    `visibilitychange` catches app backgrounding while the page is alive
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !loaded) return;
     const flush = (keepalive: boolean) => {
       if (!dirtyRef.current) return;
       if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
@@ -288,9 +326,9 @@ export function useSpaceSync() {
       window.removeEventListener("pagehide", onPageHide);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [hydrated, save]);
+  }, [hydrated, loaded, save]);
 
-  return { status, lastSyncedAt, syncNow };
+  return { status, lastSyncedAt, syncNow, loaded, loadError, retryLoad, recoveryBackup };
 }
 
 // ── Time-ago helper ───────────────────────────────────────────────────────────

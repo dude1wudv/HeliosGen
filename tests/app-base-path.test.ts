@@ -52,6 +52,14 @@ describe("prefixed managed deployment", () => {
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
+  it("treats malformed cookie encoding as anonymous instead of throwing", async () => {
+    const session = await import("@/lib/sub2api/session");
+    const request = new Request("https://patrickapi.microedulab.com/cancas/workflow", {
+      headers: { cookie: `${session.SESSION_COOKIE}=%E0%A4%A` },
+    });
+    expect(session.readSession(request)).toBeNull();
+  });
+
   it("keeps bootstrap, public assets and APIs under the prefix", async () => {
     const { proxy } = await import("@/proxy");
     const origin = "https://patrickapi.microedulab.com";
@@ -70,11 +78,11 @@ describe("prefixed managed deployment", () => {
     const url = new URL(signatures.createMediaSignature("asset", "owner", "https://patrickapi.microedulab.com"));
     expect(url.pathname).toBe("/cancas/api/media/asset");
     expect(signatures.verifyMediaSignature("asset", "owner", url.searchParams.get("expires"), url.searchParams.get("sig"))).toBe(true);
-    const callback = new URL(signatures.createKieCallbackUrl("https://patrickapi.microedulab.com"));
+    const callback = new URL(signatures.createKieCallbackUrl("https://patrickapi.microedulab.com", signatures.createKieCallbackNonce()));
     expect(callback.pathname).toBe("/cancas/api/callback");
     callback.hostname = "canvas.sub.sunmmyapi.xyz";
     callback.pathname = "/api/callback";
-    expect(signatures.verifyKieCallbackSignature(callback.searchParams.get("expires"), callback.searchParams.get("sig"))).toBe(true);
+    expect(signatures.verifyKieCallbackSignature(callback.searchParams.get("expires"), callback.searchParams.get("nonce"), callback.searchParams.get("sig"))).toBe(true);
     expect(signatures.verifyMediaSignature("asset", "another-owner", url.searchParams.get("expires"), url.searchParams.get("sig"))).toBe(false);
   });
 

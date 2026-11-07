@@ -22,9 +22,10 @@ function extractUrls(resultJson?: string): string[] {
 
 type ResultWithoutOwner = SettledJobResultWithoutOwner;
 
-function settle(taskId: string, result: ResultWithoutOwner): string | null {
+function settle(taskId: string, result: ResultWithoutOwner, callbackNonce: string | null): string | null {
   const pending = jobStore.get(taskId);
   if (!pending?.userId || pending.status !== "pending") return null;
+  if (MANAGED_MODE && (!callbackNonce || pending.callbackNonce !== callbackNonce)) return null;
   const owned = { ...result, userId: pending.userId } as SettledJobResult;
   jobStore.set(taskId, owned);
   jobEvents.emit(`job:${taskId}`, owned);
@@ -59,8 +60,10 @@ async function persistSuccess(taskId: string, userId: string, isVideo: boolean, 
 
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
+  const callbackNonce = req.nextUrl.searchParams.get("nonce");
   if (MANAGED_MODE && !verifyKieCallbackSignature(
     req.nextUrl.searchParams.get("expires"),
+    callbackNonce,
     req.nextUrl.searchParams.get("sig"),
   )) {
     return NextResponse.json({ received: false }, { status: 401 });
@@ -72,11 +75,12 @@ export async function POST(req: NextRequest) {
   if (!taskId) return NextResponse.json({ received: true });
   const pending = jobStore.get(taskId);
   if (!pending?.userId || pending.status !== "pending") return NextResponse.json({ received: true });
+  if (MANAGED_MODE && pending.callbackNonce !== callbackNonce) return NextResponse.json({ received: false }, { status: 401 });
   const state = String(data.state ?? data.status ?? "").toLowerCase();
 
   if ((body.code !== undefined && body.code !== 200) || state === "fail" || state === "failed" || state === "error") {
     const message = String(data.failMsg ?? data.error ?? body.msg ?? "Generation failed").slice(0, 240).replace(/[\r\n]/g, " ");
-    const userId = settle(taskId, { status: "error", error: message });
+    const userId = settle(taskId, { status: "error", error: message }, callbackNonce);
     if (userId) await persistError(taskId, userId, message);
     return NextResponse.json({ received: true });
   }
@@ -92,17 +96,17 @@ export async function POST(req: NextRequest) {
       const stored = await Promise.all(urls.map((url) => mirrorToR2(url, isVideo ? "videos" : "images", pending.userId)));
       const userId = settle(taskId, isVideo
         ? { status: "done", videoUrl: stored[0] }
-        : { status: "done", imageUrl: stored[0], imageUrls: stored });
+        : { status: "done", imageUrl: stored[0], imageUrls: stored }, callbackNonce);
       if (userId) await persistSuccess(taskId, userId, isVideo, stored);
     } catch (error) {
       console.error("[callback] storage upload failed", error instanceof Error ? error.message : "unknown error");
       if (!MANAGED_MODE) {
         const userId = settle(taskId, isVideo
           ? { status: "done", videoUrl: urls[0] }
-          : { status: "done", imageUrl: urls[0], imageUrls: urls });
+          : { status: "done", imageUrl: urls[0], imageUrls: urls }, callbackNonce);
         if (userId) await persistSuccess(taskId, userId, isVideo, urls);
       } else {
-        const userId = settle(taskId, { status: "error", error: "Generated media could not be stored" });
+        const userId = settle(taskId, { status: "error", error: "Generated media could not be stored" }, callbackNonce);
         if (userId) await persistError(taskId, userId, "Generated media could not be stored");
       }
     }
